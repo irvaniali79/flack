@@ -168,6 +168,7 @@ export function ChatApp() {
                 <X className="h-4 w-4" aria-hidden />
               </button>
               <Sidebar
+                showWorkspaceNav
                 onNavigate={() => {
                   setDrawerOpen(false)
                   setView('chat')

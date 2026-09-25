@@ -228,8 +228,11 @@ function MessageListInner({ channelId }: { channelId: string | null }) {
           entries.map((entry) => {
             if (entry.type === 'day') {
               return (
-                <div key={entry.key} className="sticky top-0 z-10 flex justify-center px-4 py-2 md:px-6">
-                  <span className="rounded-full border border-border bg-background/90 px-3 py-0.5 text-[11px] font-semibold text-muted-foreground shadow-sm backdrop-blur">
+                <div
+                  key={entry.key}
+                  className="sticky top-0 z-10 flex justify-center bg-background px-4 py-2 md:px-6"
+                >
+                  <span className="rounded-full border border-border bg-background px-3 py-0.5 text-[11px] font-semibold text-muted-foreground shadow-sm">
                     {entry.label}
                   </span>
                 </div>

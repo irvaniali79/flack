@@ -839,7 +839,7 @@ export function Composer({ parentId, placeholder }: { parentId?: string; placeho
               toast.success('Image attached')
             }
           }}
-          className="max-h-40 w-full resize-none bg-transparent px-3.5 pb-1 pt-3 text-[15px] leading-relaxed outline-none transition-colors duration-200 placeholder:text-muted-foreground/70 focus:placeholder:text-muted-foreground/40"
+          className="max-h-40 w-full resize-none bg-transparent px-4 pb-1 pt-3.5 text-[15px] leading-relaxed outline-none transition-colors duration-200 placeholder:text-muted-foreground/70 focus:placeholder:text-muted-foreground/40"
         />
 
         <div className="flex items-center gap-0.5 px-2 pb-2 pt-1">

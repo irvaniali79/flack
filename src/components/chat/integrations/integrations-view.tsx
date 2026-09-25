@@ -1,9 +1,11 @@
 'use client'
 // Integrations view — the developer surface for the platform's key
-// differentiator: a Model Context Protocol server. Three sections:
+// differentiators: a Model Context Protocol server and a Slack-compatible
+// Web API. Four sections:
 //   1. MCP endpoint overview + connection snippets (curl / Claude / Cursor)
-//   2. API key management (Bearer auth for external clients)
-//   3. Tool playground (call tools live, exactly as an AI client would)
+//   2. Slack bot API compatibility (zero-code bot migration)
+//   3. API key management (Bearer auth for external clients)
+//   4. Tool playground (call tools live, exactly as an AI client would)
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import {
   Cable,
@@ -24,6 +26,7 @@ import { cn } from '@/lib/utils'
 import { CodeBlock, CopyButton } from './code-block'
 import { ApiKeysSection } from './api-keys-section'
 import { ToolPlayground } from './tool-playground'
+import { SlackApiSection } from './slack-api-section'
 
 /** Live server status — pings the MCP endpoint with the session cookie. */
 function ServerStatus() {
@@ -236,7 +239,7 @@ export function IntegrationsView() {
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-base font-bold">Integrations</h1>
           <p className="truncate text-xs text-muted-foreground">
-            Model Context Protocol server — connect Claude, Cursor and any MCP client.
+            MCP server + Slack-compatible bot API — connect AI clients and existing Slack bots.
           </p>
         </div>
         <ServerStatus />
@@ -308,10 +311,13 @@ export function IntegrationsView() {
             </div>
           </section>
 
-          {/* 2 ─ API keys */}
+          {/* 2 ─ Slack bot API compatibility */}
+          <SlackApiSection origin={origin} />
+
+          {/* 3 ─ API keys */}
           <ApiKeysSection />
 
-          {/* 3 ─ playground */}
+          {/* 4 ─ playground */}
           {tools ? (
             <ToolPlayground tools={tools} />
           ) : loadError ? (
@@ -328,7 +334,7 @@ export function IntegrationsView() {
             </div>
           )}
 
-          {/* 4 ─ tool reference */}
+          {/* 5 ─ tool reference */}
           {tools && <ToolReference tools={tools} />}
         </div>
       </div>

@@ -414,8 +414,9 @@ export function ChannelHeader() {
                 title={channel.topic ?? 'Add a topic'}
                 onClick={() => channel.isMember && setEditState({ channelId: channel.id, topic: channel.topic ?? '', renaming: false, renameValue: '' })}
                 className={cn(
-                  'max-w-[240px] truncate rounded px-1.5 py-0.5 text-[13px] text-muted-foreground transition-colors duration-150 lg:max-w-[360px]',
-                  channel.isMember && 'hover:bg-accent hover:text-foreground',
+                  'max-w-[240px] truncate rounded px-1.5 py-0.5 text-[13px] text-muted-foreground transition-colors duration-150 lg:max-w-[420px] xl:max-w-[520px]',
+                  channel.isMember &&
+                    'hover:bg-accent hover:text-foreground hover:decoration-muted-foreground/50 hover:underline hover:underline-offset-4',
                 )}
               >
                 {channel.topic || (channel.isMember ? 'Add a topic' : '')}
