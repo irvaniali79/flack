@@ -777,3 +777,24 @@ Stage Summary:
 - ARCHITECTURE NOTE: the chrome = anything inside the `dark`-classed containers (sidebar root, rail container, desktop aside). New chrome surfaces should keep using bg-accent-surface / -2 / -hover tokens; anything portaled must NOT rely on chrome tokens. Tailwind v4 gates hover: behind @media (hover: hover) — untestable in agent-browser (emulates touch); use class-forcing probes to verify hover colors.
 - Login: sarah@acme.test / demo1234 (owner). Browser QA via http://localhost:81. Demo state: dark + emerald.
 - Next-phase candidates (carryover): scheduler-driven connector events, emoji autocomplete in composer, connector slash-commands, per-connector multi-channel routing, admin connector overview, accent theme quick-switcher in profile menu.
+
+---
+Task ID: 23
+Agent: main (Z.ai Code)
+Task: User asks (1) whether acme-chat-project.zip at root is the final version, and (2) confirms the desired behavior — "sidebar is always in dark mode colours (text are light and others are dark)". Verify + perfect the mode-independent dark sidebar chrome, then ship the final zip.
+
+Work Log:
+- Zip freshness audit: root zip (built 20:16) was byte-identical to live source at audit time (extracted sidebar.tsx + globals.css from zip, diffed clean) — it contained Task 22's saturated-chrome work.
+- BUT deep QA of the user's exact spec ("text are light and others are dark" in BOTH modes) found a REAL inheritance bug class in LIGHT mode: elements inside the chrome that set NO explicit text color (plain `color` inheritance) inherit the computed color from `body` — which resolves OUTSIDE the scoped `.dark` container — so they rendered dark text on the dark sidebar in light mode. Affected (scan of all leaf text nodes, luminance < 0.55): "Acme Inc" org-header span and "Sarah Chen" current-user span (both rgb(10,10,10) on the dark saturated surface). Root cause: the Task 22 scoped-`dark` trick redefines CUSTOM PROPERTIES for the subtree (works for var()-referencing utilities like text-foreground/text-muted-foreground) but does NOT re-cascade the inherited `color` property, which body computes once at app scope.
+- FIX: explicit `text-foreground` on all three scoped-dark chrome containers — sidebar.tsx root div (line ~615), rail.tsx container (line ~71), app.tsx desktop aside (line ~138). On those elements var(--foreground) resolves from the scoped .dark token set → light text, and every class-less descendant inherits the computed LIGHT color. Mobile drawer needs no extra edit (it renders <Sidebar/>, whose own root is fixed); its outside-scope close button stays canvas-styled intentionally.
+- RE-VERIFIED (agent-browser session final22 via :81, sarah, both modes): sidebar bg byte-identical across modes — oklab(0.257743 -0.0273619 0.000780353) emerald-saturated dark; rail oklab(0.225595...); "Acme Inc" + "Sarah Chen" now rgb(250,250,250) in LIGHT mode; full leaf-node luminance scan: 0 dark-text elements in sidebar+rail (was 2); canvas still mode-dependent (0.98 light / 0.17 dark). VLM: light-mode "PASS — dark background with light, clearly readable text, main chat area light"; dark-mode "PASS — saturated dark background, high-contrast, no glitches".
+- lint 0 errors · 0 page errors · 0 console errors · dev :3000 + chat-service :3003 healthy (dev server had died; restarted via nohup bun run dev).
+- REBUILT the final zip: /home/z/my-project/acme-chat-project.zip (6.77MB, integrity OK) with the canonical self-excluding pack command; extracted sidebar/rail/app from the new archive and diffed against live source — identical. THIS IS THE FINAL VERSION (includes Tasks 18-23).
+- Demo state restored: dark + emerald.
+
+Stage Summary:
+- USER QUESTION ANSWERED: yes — acme-chat-project.zip at the project root is now the FINAL version (6.77MB, rebuilt 20:51 after this fix, byte-verified against live source).
+- SIDEBAR BEHAVIOR NOW EXACTLY AS SPEC'D: rail + sidebar render permanent dark-mode colors in BOTH app modes — saturated dark surfaces (derived from the active accent theme, all 12 themes) + LIGHT text everywhere, including previously-inheriting elements. Main canvas remains mode-dependent.
+- ARCHITECTURE NOTE (important for future rounds): the scoped `dark` class re-cascades custom properties only; inherited non-custom properties (color, etc.) still come from the outer scope. Any chrome container that should force dark chrome needs BOTH the `dark` class AND an explicit text color (text-foreground) on the container. Portaled overlays (dropdowns/popovers/dialogs at body level) remain mode-appropriate by design.
+- Login: sarah@acme.test / demo1234 (owner). Browser QA via http://localhost:81. Demo state: dark + emerald.
+- Next-phase candidates (carryover): scheduler-driven connector events, emoji autocomplete in composer, connector slash-commands, per-connector multi-channel routing, admin connector overview, accent theme quick-switcher in profile menu.

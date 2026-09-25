@@ -610,7 +610,9 @@ export function Sidebar({
     // `dark` class — the whole sidebar chrome renders the saturated dark token
     // set in BOTH light & dark mode (user-requested: identical sidebar colors
     // across modes; text/badges/variants resolve from the scoped .dark rules).
-    <div className="dark flex h-full w-full flex-col bg-accent-surface">
+    // `text-foreground` — explicit color so descendants that plain-INHERIT color
+    // (no text-* class) resolve from the scoped .dark token set too, not from body.
+    <div className="dark flex h-full w-full flex-col bg-accent-surface text-foreground">
       {/* org header */}
       <div className="flex items-center gap-1 px-2.5 pb-2 pt-3">
         <DropdownMenu>

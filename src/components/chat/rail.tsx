@@ -66,8 +66,9 @@ export function Rail() {
 
   return (
     <TooltipProvider delayDuration={250}>
-      {/* `dark` class — the rail renders the saturated dark chrome tokens in both modes */}
-      <div className="dark flex h-full w-14 shrink-0 flex-col items-center gap-1 border-r border-border bg-accent-surface-2 py-3">
+      {/* `dark` class — the rail renders the saturated dark chrome tokens in both modes;
+          `text-foreground` pins inherited text to the scoped dark token set (see sidebar.tsx) */}
+      <div className="dark flex h-full w-14 shrink-0 flex-col items-center gap-1 border-r border-border bg-accent-surface-2 py-3 text-foreground">
         {/* org block */}
         <Tooltip>
           <TooltipTrigger asChild>
