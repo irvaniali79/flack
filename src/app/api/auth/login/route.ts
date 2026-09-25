@@ -32,7 +32,7 @@ export async function POST(request: Request) {
       return { requires2fa: true, challengeId, email }
     }
 
-    await createSession(user.id)
+    await createSession(user.id, request)
     return { user: serializeUser(user) }
   })
 }

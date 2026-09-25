@@ -105,6 +105,8 @@ export interface NotificationDTO {
   readAt: string | null
   /** true while held back by quiet hours — delivered as a digest when the window ends */
   suppressed: boolean
+  /** ISO instant while snoozed — hidden from the popover + badge until released */
+  snoozedUntil?: string | null
   createdAt: string
 }
 

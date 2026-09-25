@@ -8,6 +8,7 @@ import {
   Bot,
   CheckCheck,
   ChevronDown,
+  Clock,
   Compass,
   Hash,
   Keyboard,
@@ -40,12 +41,14 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useChatStore } from '@/lib/store'
+import { api } from '@/lib/api'
 import { useViewStore, type MainView } from '@/lib/view-store'
 import type { ChannelDTO } from '@/lib/types'
 import { UserAvatar } from './avatar'
 import { PresenceDot } from './presence-dot'
 import { AgentDialog } from './agents/agent-dialog'
-import { formatRelativeTime } from '@/lib/time'
+import { formatRelativeTime, formatTime } from '@/lib/time'
+import type { NotificationDTO } from '@/lib/types'
 import { isQuietHours, quietUntilLabel } from '@/lib/dnd'
 import { AtSign, CornerDownRight } from 'lucide-react'
 
@@ -76,11 +79,68 @@ const TYPE_STYLES: Record<string, { icon: typeof AtSign; classes: string; label:
 
 const FALLBACK_STYLE = { classes: 'bg-muted text-muted-foreground', label: 'Notification' }
 
+// ── notification snooze ─────────────────────────────────────────────────────
+
+function tomorrow9amIso(): string {
+  const d = new Date()
+  d.setDate(d.getDate() + 1)
+  d.setHours(9, 0, 0, 0)
+  return d.toISOString()
+}
+
+const SNOOZE_PRESETS: { label: string; minutes?: number; until?: string }[] = [
+  { label: '20 minutes', minutes: 20 },
+  { label: '1 hour', minutes: 60 },
+  { label: '3 hours', minutes: 180 },
+  { label: 'Tomorrow 9 AM', until: tomorrow9amIso() },
+]
+
+function SnoozeMenu({ onSnooze }: { onSnooze: (preset: { minutes?: number; until?: string }) => void }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label="Snooze notification"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity duration-150 hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+        >
+          <Clock className="h-3.5 w-3.5" aria-hidden />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" side="left" className="w-44 rounded-xl p-1">
+        <p className="px-2 pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+          Snooze for
+        </p>
+        {SNOOZE_PRESETS.map((preset) => (
+          <button
+            key={preset.label}
+            type="button"
+            onClick={() => {
+              onSnooze(preset.minutes !== undefined ? { minutes: preset.minutes } : { until: preset.until })
+              setOpen(false)
+            }}
+            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] transition-colors duration-150 hover:bg-accent"
+          >
+            <Clock className="h-3 w-3 text-muted-foreground" aria-hidden />
+            {preset.label}
+          </button>
+        ))}
+        <p className="px-2 pb-1.5 pt-1 text-[10px] leading-snug text-muted-foreground">
+          Hidden from your badge until then — returns as unread.
+        </p>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 function NotificationBell() {
   const notifications = useChatStore((s) => s.notifications)
   const unread = useChatStore((s) => s.notificationsUnread)
   const fetchNotifications = useChatStore((s) => s.fetchNotifications)
   const markNotificationsRead = useChatStore((s) => s.markNotificationsRead)
+  const snoozeNotification = useChatStore((s) => s.snoozeNotification)
+  const unsnoozeNotification = useChatStore((s) => s.unsnoozeNotification)
   const openChannel = useChatStore((s) => s.openChannel)
   const me = useChatStore((s) => s.me)
   const [open, setOpen] = useState(false)
@@ -91,9 +151,14 @@ function NotificationBell() {
 
   const quiet = me ? isQuietHours(me) : false
   const quietUntil = me ? quietUntilLabel(me) : null
-  // Suppressed (quiet-hours) rows render in their own section, not as unread
-  const active = notifications.filter((n) => !n.suppressed)
-  const quietRows = notifications.filter((n) => n.suppressed)
+  // Suppressed (quiet-hours) rows render in their own section, not as unread;
+  // snoozed rows hide until their timer ends
+  const now = Date.now()
+  const isSnoozed = (n: NotificationDTO) =>
+    n.snoozedUntil ? new Date(n.snoozedUntil).getTime() > now : false
+  const active = notifications.filter((n) => !n.suppressed && !isSnoozed(n))
+  const quietRows = notifications.filter((n) => n.suppressed && !isSnoozed(n))
+  const snoozedRows = notifications.filter(isSnoozed)
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -114,14 +179,33 @@ function NotificationBell() {
       <PopoverContent align="start" side="bottom" className="w-80 rounded-xl p-0">
         <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
           <p className="text-sm font-semibold">Notifications</p>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 gap-1 px-2 text-xs text-muted-foreground"
-            onClick={() => void markNotificationsRead()}
-          >
-            <CheckCheck className="h-3.5 w-3.5" aria-hidden /> Mark all read
-          </Button>
+          <div className="flex items-center gap-1">
+            {unread > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label="Snooze all unread notifications for 1 hour"
+                title="Snooze all unread for 1 hour"
+                className="h-7 gap-1 px-2 text-xs text-muted-foreground"
+                onClick={() => {
+                  void api('/api/notifications/snooze', { method: 'POST', body: { all: true, minutes: 60 } })
+                    .then(() => toast.success('Unread notifications snoozed for 1 hour'))
+                    .catch(() => toast.error('Could not snooze notifications'))
+                    .finally(() => void fetchNotifications())
+                }}
+              >
+                <Clock className="h-3.5 w-3.5" aria-hidden /> Snooze all
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1 px-2 text-xs text-muted-foreground"
+              onClick={() => void markNotificationsRead()}
+            >
+              <CheckCheck className="h-3.5 w-3.5" aria-hidden /> Mark all read
+            </Button>
+          </div>
         </div>
         {quiet && (
           <div className="flex items-center gap-2 border-b border-amber-500/20 bg-amber-500/10 px-3 py-2">
@@ -132,7 +216,7 @@ function NotificationBell() {
           </div>
         )}
         <div className="max-h-96 overflow-y-auto p-1.5">
-          {active.length === 0 && quietRows.length === 0 ? (
+          {active.length === 0 && quietRows.length === 0 && snoozedRows.length === 0 ? (
             <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
               <BellOff className="h-8 w-8 text-muted-foreground/50" aria-hidden />
               <p className="text-sm text-muted-foreground">You&rsquo;re all caught up</p>
@@ -143,49 +227,54 @@ function NotificationBell() {
                 const style = TYPE_STYLES[notification.type] ?? FALLBACK_STYLE
                 const Icon = style.icon ?? Bell
                 return (
-                <button
+                <div
                   key={notification.id}
-                  type="button"
-                  onClick={() => {
-                    if (notification.channelId) {
-                      void openChannel(notification.channelId)
-                    }
-                    // Reading it = read (single-row mark)
-                    if (!notification.readAt) {
-                      void markNotificationsRead([notification.id])
-                    }
-                    setOpen(false)
-                  }}
                   className={cn(
-                    'flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors duration-150 hover:bg-accent',
+                    'group flex items-start gap-1 rounded-lg px-2 py-2 transition-colors duration-150 hover:bg-accent',
                     !notification.readAt && 'bg-emerald-500/5',
                   )}
                 >
-                  <span
-                    className={cn(
-                      'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md',
-                      style.classes,
-                    )}
-                    aria-hidden
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (notification.channelId) {
+                        void openChannel(notification.channelId)
+                      }
+                      // Reading it = read (single-row mark)
+                      if (!notification.readAt) {
+                        void markNotificationsRead([notification.id])
+                      }
+                      setOpen(false)
+                    }}
+                    className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
                   >
-                    <Icon className="h-3.5 w-3.5" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[13px] leading-snug">{notification.body}</span>
-                    <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                      <span className="font-medium">{style.label}</span>
-                      <span aria-hidden>·</span>
-                      <span>{formatRelativeTime(notification.createdAt)}</span>
-                      {notification.channelName ? <span aria-hidden>· {notification.channelName}</span> : null}
-                    </span>
-                  </span>
-                  {!notification.readAt && (
                     <span
-                      className="mt-2 h-2 w-2 shrink-0 rounded-full bg-emerald-500"
-                      aria-label="Unread"
-                    />
-                  )}
-                </button>
+                      className={cn(
+                        'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md',
+                        style.classes,
+                      )}
+                      aria-hidden
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[13px] leading-snug">{notification.body}</span>
+                      <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                        <span className="font-medium">{style.label}</span>
+                        <span aria-hidden>·</span>
+                        <span>{formatRelativeTime(notification.createdAt)}</span>
+                        {notification.channelName ? <span aria-hidden>· {notification.channelName}</span> : null}
+                      </span>
+                    </span>
+                    {!notification.readAt && (
+                      <span
+                        className="mt-2 h-2 w-2 shrink-0 rounded-full bg-emerald-500"
+                        aria-label="Unread"
+                      />
+                    )}
+                  </button>
+                  <SnoozeMenu onSnooze={(preset) => void snoozeNotification(notification.id, preset)} />
+                </div>
                 )
               })}
               {quietRows.length > 0 && (
@@ -231,6 +320,54 @@ function NotificationBell() {
                   })}
                   <p className="px-2.5 pb-1 pt-0.5 text-[10px] leading-snug text-muted-foreground">
                     Held back by quiet hours — delivered with a digest when your window ends.
+                  </p>
+                </div>
+              )}
+
+              {snoozedRows.length > 0 && (
+                <div className="mt-1">
+                  <p className="flex items-center gap-1.5 px-2.5 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wider text-violet-600 dark:text-violet-400">
+                    <Clock className="h-3 w-3" aria-hidden /> Snoozed
+                  </p>
+                  {snoozedRows.map((notification) => {
+                    const style = TYPE_STYLES[notification.type] ?? FALLBACK_STYLE
+                    const Icon = style.icon ?? Bell
+                    return (
+                      <div
+                        key={notification.id}
+                        className="group flex items-start gap-2.5 rounded-lg px-2.5 py-2 opacity-60"
+                      >
+                        <span
+                          className={cn(
+                            'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md opacity-60',
+                            style.classes,
+                          )}
+                          aria-hidden
+                        >
+                          <Icon className="h-3.5 w-3.5" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <span className="block text-[13px] leading-snug">{notification.body}</span>
+                          <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                            <span className="flex items-center gap-1 font-medium text-violet-600 dark:text-violet-400">
+                              <Clock className="h-3 w-3" aria-hidden /> until{' '}
+                              {formatTime(notification.snoozedUntil!)}
+                            </span>
+                            <span aria-hidden>·</span>
+                            <button
+                              type="button"
+                              onClick={() => void unsnoozeNotification(notification.id)}
+                              className="rounded px-1 font-medium text-foreground/80 underline-offset-2 opacity-0 transition-opacity duration-150 hover:text-foreground hover:underline focus-visible:opacity-100 group-hover:opacity-100"
+                            >
+                              Bring back now
+                            </button>
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                  <p className="px-2.5 pb-1 pt-0.5 text-[10px] leading-snug text-muted-foreground">
+                    Snoozed notifications return as unread when their timer ends.
                   </p>
                 </div>
               )}

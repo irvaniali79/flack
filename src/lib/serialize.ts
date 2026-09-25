@@ -201,6 +201,7 @@ export function serializeNotification(n: NotificationFull): NotificationDTO {
     actorName: n.actor?.name ?? null,
     readAt: n.readAt?.toISOString() ?? null,
     suppressed: n.suppressed,
+    snoozedUntil: n.snoozedUntil?.toISOString() ?? null,
     createdAt: n.createdAt.toISOString(),
   }
 }

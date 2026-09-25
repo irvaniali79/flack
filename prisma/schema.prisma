@@ -79,6 +79,10 @@ model Session {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
   createdAt DateTime @default(now())
+  // "Chrome 129 · macOS" snapshot captured at sign-in
+  userAgent String?
+  // Refreshed (throttled) on authenticated requests
+  lastUsedAt DateTime @default(now())
 }
 
 // ─── API keys (MCP + programmatic access) ────────────────────────────────────
@@ -310,6 +314,9 @@ model Notification {
   // true = created during the recipient's quiet hours — hidden from badges and
   // dings until the digest release (scheduler tick) flips it when the window ends
   suppressed Boolean  @default(false)
+  // "Snooze": hidden from the popover + badge until this instant, then released
+  // back as unread by the scheduler tick
+  snoozedUntil DateTime?
   createdAt DateTime  @default(now())
 
   @@index([userId, readAt])

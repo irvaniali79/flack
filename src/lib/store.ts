@@ -186,6 +186,8 @@ interface ChatState {
   /** Re-fetch the current user (e.g. after 2FA changes made via other endpoints). */
   refreshMe: () => Promise<void>
   markNotificationsRead: (ids?: string[]) => Promise<void>
+  snoozeNotification: (id: string, preset: { minutes?: number; until?: string }) => Promise<void>
+  unsnoozeNotification: (id: string) => Promise<void>
   emitTyping: (channelId: string) => void
 
   // ── realtime handlers (called from socket.ts) ─────────────────────────────
@@ -379,10 +381,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
   fetchNotifications: async () => {
     try {
       const data = await api<{ notifications: NotificationDTO[] }>('/api/notifications')
+      const now = Date.now()
+      const isSnoozed = (n: NotificationDTO) =>
+        n.snoozedUntil ? new Date(n.snoozedUntil).getTime() > now : false
       set({
         notifications: data.notifications,
-        // Suppressed (quiet-hours) notifications never count toward the badge
-        notificationsUnread: data.notifications.filter((n) => !n.readAt && !n.suppressed).length,
+        // Suppressed (quiet-hours) + snoozed notifications never count toward the badge
+        notificationsUnread: data.notifications.filter(
+          (n) => !n.readAt && !n.suppressed && !isSnoozed(n),
+        ).length,
       })
     } catch {
       // ignore
@@ -773,13 +780,47 @@ export const useChatStore = create<ChatState>((set, get) => ({
       )
       return {
         notifications: patched,
-        // Optimistic count of what remains unread (suppressed never counted)
-        notificationsUnread: patched.filter((n) => !n.readAt && !n.suppressed).length,
+        // Optimistic count of what remains unread (suppressed/snoozed never counted)
+        notificationsUnread: patched.filter(
+          (n) => !n.readAt && !n.suppressed && !(n.snoozedUntil && new Date(n.snoozedUntil) > new Date()),
+        ).length,
       }
     })
     await api('/api/notifications', { method: 'POST', body: ids ? { ids } : {} })
     // Re-sync the badge with server truth
     void get().fetchNotifications()
+  },
+
+  snoozeNotification: async (id, preset) => {
+    // Optimistic: hide it from the visible set until the refetch lands
+    set((s) => ({
+      notifications: s.notifications.map((n) =>
+        n.id === id
+          ? {
+              ...n,
+              snoozedUntil: preset.until
+                ? new Date(preset.until).toISOString()
+                : new Date(Date.now() + (preset.minutes ?? 60) * 60 * 1000).toISOString(),
+            }
+          : n,
+      ),
+    }))
+    try {
+      await api('/api/notifications/snooze', { method: 'POST', body: { id, ...preset } })
+    } finally {
+      void get().fetchNotifications()
+    }
+  },
+
+  unsnoozeNotification: async (id) => {
+    set((s) => ({
+      notifications: s.notifications.map((n) => (n.id === id ? { ...n, snoozedUntil: null } : n)),
+    }))
+    try {
+      await api('/api/notifications/snooze', { method: 'POST', body: { id, undo: true } })
+    } finally {
+      void get().fetchNotifications()
+    }
   },
 
   emitTyping: (channelId) => {

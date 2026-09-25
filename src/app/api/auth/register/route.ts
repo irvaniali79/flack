@@ -55,7 +55,7 @@ export async function POST(request: Request) {
       })
     }
 
-    await createSession(user.id)
+    await createSession(user.id, request)
     return { user: serializeUser(user) }
   })
 }

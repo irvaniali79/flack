@@ -241,11 +241,11 @@ function MessageListInner({ channelId }: { channelId: string | null }) {
             if (entry.type === 'unread') {
               return (
                 <div key={entry.key} className="flex items-center gap-3 px-4 py-2.5 md:px-6" aria-label="New messages">
-                  <span className="h-px flex-1 bg-emerald-500/50" aria-hidden />
-                  <span className="rounded-full bg-emerald-600 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                  <span className="h-px flex-1 bg-emerald-600/40 dark:bg-emerald-500/30" aria-hidden />
+                  <span className="rounded-full border border-emerald-600/30 bg-emerald-600/10 px-2 py-px text-[10px] font-semibold uppercase tracking-wider text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
                     New
                   </span>
-                  <span className="h-px flex-1 bg-emerald-500/50" aria-hidden />
+                  <span className="h-px flex-1 bg-emerald-600/40 dark:bg-emerald-500/30" aria-hidden />
                 </div>
               )
             }

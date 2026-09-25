@@ -1,9 +1,11 @@
 'use client'
 // Settings → Security tab: TOTP two-factor enrollment (QR + secret + first-code
 // verify), one-time recovery codes (shown once, copy/download), regenerate
-// (password), and disable (live code or password). Talks to /api/me/2fa.
-import { useState } from 'react'
+// (password), disable (live code or password), and the active-sessions device
+// list with per-session + bulk revoke. Talks to /api/me/2fa and /api/me/sessions.
+import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import { formatDistanceToNow, parseISO } from 'date-fns'
 import {
   AlertTriangle,
   Check,
@@ -12,6 +14,8 @@ import {
   Eye,
   EyeOff,
   Loader2,
+  LogOut,
+  Monitor,
   RefreshCcw,
   ShieldCheck,
   ShieldOff,
@@ -33,6 +37,174 @@ interface SetupResponse {
 interface EnableResponse {
   enabled: boolean
   recoveryCodes: string[]
+}
+
+interface SessionRow {
+  id: string
+  current: boolean
+  device: string
+  createdAt: string
+  lastUsedAt: string
+  expiresAt: string
+}
+
+/** Active sessions — every signed-in device for this account, revoke per row. */
+function SessionsSection() {
+  const logout = useChatStore((s) => s.logout)
+  const [sessions, setSessions] = useState<SessionRow[] | null>(null)
+  const [busy, setBusy] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    try {
+      const data = await api<{ sessions: SessionRow[] }>('/api/me/sessions')
+      setSessions(data.sessions)
+    } catch {
+      setSessions([])
+    }
+  }, [])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  const revoke = async (row: SessionRow) => {
+    if (busy) return
+    setBusy(row.id)
+    try {
+      const res = await api<{ revoked: number; wasCurrent: boolean }>(`/api/me/sessions/${row.id}`, {
+        method: 'DELETE',
+      })
+      if (res.wasCurrent) {
+        toast.success('Signed out — see you soon 👋')
+        await logout()
+        return
+      }
+      toast.success(`Signed out ${row.device}`)
+      await load()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not revoke the session')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const revokeOthers = async () => {
+    if (busy || !sessions?.some((s) => !s.current)) return
+    setBusy('others')
+    try {
+      const res = await api<{ revoked: number }>('/api/me/sessions?action=revoke-others', {
+        method: 'POST',
+        body: {},
+      })
+      toast.success(`Signed out ${res.revoked} other session${res.revoked === 1 ? '' : 's'}`)
+      await load()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not revoke sessions')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const others = sessions?.filter((s) => !s.current) ?? []
+
+  return (
+    <div className="space-y-2.5 rounded-xl border border-border p-4">
+      <div className="flex items-center gap-2">
+        <Monitor className="h-4 w-4 text-muted-foreground" aria-hidden />
+        <Label>Active sessions</Label>
+        <span className="ml-auto rounded-full bg-muted px-2 py-px text-[10px] font-medium text-muted-foreground">
+          {sessions ? `${sessions.length} signed in` : '…'}
+        </span>
+      </div>
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        Every device where this account is signed in. Revoking a session signs it out
+        immediately — its cookie stops working.
+      </p>
+
+      {sessions === null ? (
+        <div className="space-y-1.5">
+          <div className="h-12 animate-pulse rounded-lg bg-muted" />
+          <div className="h-12 animate-pulse rounded-lg bg-muted" />
+        </div>
+      ) : sessions.length === 0 ? (
+        <p className="text-xs text-muted-foreground">No active sessions.</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {sessions.map((row) => {
+            const isPhone = /iPhone|iPad|Android/.test(row.device)
+            const isApi = row.device.includes('API client')
+            return (
+              <li
+                key={row.id}
+                className={cn(
+                  'flex items-center gap-2.5 rounded-lg border p-2.5',
+                  row.current ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-border',
+                )}
+              >
+                <span
+                  className={cn(
+                    'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
+                    row.current
+                      ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                      : 'bg-muted text-muted-foreground',
+                  )}
+                  aria-hidden
+                >
+                  {isApi ? <ShieldCheck className="h-4 w-4" /> : isPhone ? <Smartphone className="h-4 w-4" /> : <Monitor className="h-4 w-4" />}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="flex flex-wrap items-center gap-1.5 text-xs font-semibold">
+                    {row.device}
+                    {row.current && (
+                      <span className="rounded-full bg-emerald-500/15 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                        This device
+                      </span>
+                    )}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    Active {formatDistanceToNow(parseISO(row.lastUsedAt), { addSuffix: true })} · signed in{' '}
+                    {formatDistanceToNow(parseISO(row.createdAt), { addSuffix: true })}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy !== null}
+                  onClick={() => void revoke(row)}
+                  className="h-7 shrink-0 rounded-lg px-2 text-[11px]"
+                  aria-label={`Sign out ${row.device}`}
+                >
+                  {busy === row.id ? (
+                    <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+                  ) : (
+                    <LogOut className="h-3 w-3" aria-hidden />
+                  )}
+                  {row.current ? 'Sign out' : 'Revoke'}
+                </Button>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+
+      {others.length > 0 && (
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={busy !== null}
+          onClick={() => void revokeOthers()}
+          className="w-full rounded-lg text-rose-600 hover:bg-rose-500/10 hover:text-rose-600 dark:text-rose-400"
+        >
+          {busy === 'others' ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+          ) : (
+            <LogOut className="h-3.5 w-3.5" aria-hidden />
+          )}
+          Sign out {others.length} other session{others.length === 1 ? '' : 's'}
+        </Button>
+      )}
+    </div>
+  )
 }
 
 type Phase = 'status' | 'setup' | 'recovery' | 'disable' | 'regenerate'
@@ -528,6 +700,8 @@ export function SecurityTab() {
           </div>
         </div>
       </div>
+
+      <SessionsSection />
 
       {error && (
         <p role="alert" className="rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-600 dark:text-rose-400">

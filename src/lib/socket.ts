@@ -160,6 +160,12 @@ export function initSocket(userId: string, name: string): void {
     void store.getState().fetchNotifications()
   })
 
+  socket.on('notifications:refresh', () => {
+    // Snoozed notifications were released back by the scheduler tick —
+    // silent refetch (no toast; they simply reappear in the popover)
+    void store.getState().fetchNotifications()
+  })
+
   socket.on('channels:refresh', () => {
     void store.getState().handleChannelsRefresh()
   })

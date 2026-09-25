@@ -9,7 +9,7 @@
 //
 // Methods: initialize · notifications/initialized · ping · tools/list ·
 //          tools/call · resources/list · resources/read ·
-//          resources/templates/list · prompts/list
+//          resources/templates/list · prompts/list · prompts/get
 import { db } from '@/lib/db'
 import { getSessionUser } from '@/lib/auth'
 import { requireApiKeyUser, TOOL_SCOPE_REQUIREMENTS } from '@/lib/api-keys'
@@ -125,6 +125,74 @@ function toolErrorContent(message: string) {
   return { content: [{ type: 'text', text: message }], isError: true }
 }
 
+// ─── Prompt templates ────────────────────────────────────────────────────────
+// MCP prompts are reusable instruction templates the CLIENT fills and runs —
+// the server renders arguments into the text; execution happens client-side
+// with the tools this same server exposes.
+
+interface PromptTemplate {
+  name: string
+  description: string
+  arguments: { name: string; description: string; required?: boolean }[]
+  render: (args: Record<string, string>) => { description: string; text: string }
+}
+
+const PROMPT_TEMPLATES: PromptTemplate[] = [
+  {
+    name: 'catch_up',
+    description:
+      'Summarize what happened in a channel — reads the channel resource and produces a digest with decisions and open threads',
+    arguments: [
+      { name: 'channel', description: 'Channel slug, e.g. "engineering"', required: true },
+      { name: 'hours', description: 'Look-back window in hours (default 24)' },
+    ],
+    render: (args) => ({
+      description: `Catch up on #${args.channel ?? '…'}`,
+      text:
+        `Read the latest messages from the channel "${args.channel ?? ''}" (use the ` +
+        `acme://channels/${args.channel ?? ''}/messages?limit=200 resource, or the read_channel tool). ` +
+        `Focus on messages from the last ${args.hours ?? '24'} hours. ` +
+        'Then summarize:\n' +
+        '1. Key decisions that were made\n' +
+        '2. Open questions or unresolved threads (with thread links)\n' +
+        '3. Anything that needs my attention or a reply\n' +
+        'Keep it tight — bullets, names, and message quotes only where they add clarity.',
+    }),
+  },
+  {
+    name: 'thread_review',
+    description:
+      'Extract decisions and action items from a thread — feed it a thread_ts and get a structured review',
+    arguments: [{ name: 'thread_ts', description: 'Thread root message ts (get it from read_channel output)', required: true }],
+    render: (args) => ({
+      description: `Review thread ${args.thread_ts ?? '…'}`,
+      text:
+        `Use the get_thread tool with thread_ts "${args.thread_ts ?? ''}" to read the full thread, then produce:\n` +
+        '1. DECISIONS — what was agreed (quote the deciding reply)\n' +
+        '2. ACTION ITEMS — who owes what (mention the @person)\n' +
+        '3. OPEN — what is still being debated\n' +
+        'If the thread has no replies yet, say so and summarize the root message instead.',
+    }),
+  },
+  {
+    name: 'standup',
+    description: 'Draft a standup update from a channel\u2019s recent activity — what shipped, what\u2019s in flight, what\u2019s blocked',
+    arguments: [
+      { name: 'channel', description: 'Channel slug to pull updates from, e.g. "engineering"', required: true },
+    ],
+    render: (args) => ({
+      description: `Standup draft from #${args.channel ?? '…'}`,
+      text:
+        `Read the last 24 hours from "${args.channel ?? ''}" (acme://channels/${args.channel ?? ''}/messages?limit=200). ` +
+        'Then draft MY standup update as if I posted in that channel yesterday:\n' +
+        '• Shipped / landed (from deploys, PRs and completion talk)\n' +
+        '• In flight (what the team was mid-way through)\n' +
+        '• Blocked / needs help (explicit blockers or unanswered asks)\n' +
+        'Write it in first person, ready to paste as a message. Keep it under 150 words.',
+    }),
+  },
+]
+
 // ─── POST: the MCP endpoint ──────────────────────────────────────────────────
 
 export async function POST(request: Request) {
@@ -183,6 +251,7 @@ async function handleMessage(request: Request, msg: JsonRpcRequest): Promise<Res
           'get_thread, add_reaction, create_channel. Resources: acme://channels/{slug} ' +
           '(recent messages — list with resources/list, read with resources/read) and the ' +
           'parameterized template acme://channels/{slug}/messages?limit=N (see resources/templates/list). ' +
+          'Prompts: catch_up, thread_review, standup (reusable instruction templates — list with prompts/list, render with prompts/get). ' +
           'All actions run as ' +
           actor.user.name + '.',
       })
@@ -316,7 +385,40 @@ async function handleMessage(request: Request, msg: JsonRpcRequest): Promise<Res
     }
 
     case 'prompts/list':
-      return ok(id, { prompts: [] })
+      return ok(id, {
+        prompts: PROMPT_TEMPLATES.map((p) => ({
+          name: p.name,
+          description: p.description,
+          arguments: p.arguments,
+        })),
+      })
+
+    case 'prompts/get': {
+      const name = typeof msg.params?.name === 'string' ? msg.params.name : ''
+      const template = PROMPT_TEMPLATES.find((p) => p.name === name)
+      if (!template) {
+        return err(id, -32602, `Unknown prompt "${name}" — available: ${PROMPT_TEMPLATES.map((p) => p.name).join(', ')}`)
+      }
+      const rawArgs = (msg.params?.arguments ?? {}) as Record<string, unknown>
+      const args: Record<string, string> = {}
+      for (const spec of template.arguments) {
+        const value = rawArgs[spec.name]
+        if (value !== undefined && value !== null) args[spec.name] = String(value)
+        else if (spec.required) {
+          return err(id, -32602, `Missing required argument "${spec.name}" for prompt "${name}"`)
+        }
+      }
+      const rendered = template.render(args)
+      return ok(id, {
+        description: rendered.description,
+        messages: [
+          {
+            role: 'user' as const,
+            content: { type: 'text' as const, text: rendered.text },
+          },
+        ],
+      })
+    }
 
     case 'tools/call': {
       const name = msg.params?.name
@@ -377,7 +479,7 @@ export async function GET() {
       version: SERVER_INFO.version,
       protocolVersion: PROTOCOL_VERSION,
       transport: 'http-jsonrpc',
-      methods: ['initialize', 'notifications/initialized', 'ping', 'tools/list', 'tools/call', 'resources/list', 'resources/read', 'resources/templates/list', 'prompts/list'],
+      methods: ['initialize', 'notifications/initialized', 'ping', 'tools/list', 'tools/call', 'resources/list', 'resources/read', 'resources/templates/list', 'prompts/list', 'prompts/get'],
       auth: 'Authorization: Bearer acme_… (API key) — manage keys in the app: Integrations view',
       note: 'Send JSON-RPC 2.0 requests via POST. SSE streaming is not enabled.',
     },

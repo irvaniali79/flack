@@ -292,6 +292,123 @@ function ResourcesSection({ origin }: { origin: string }) {
   )
 }
 
+/** MCP prompts — reusable instruction templates AI clients fill and run. */
+interface PromptInfo {
+  name: string
+  description: string
+  arguments: { name: string; description: string; required?: boolean }[]
+}
+
+function PromptsSection({ origin }: { origin: string }) {
+  const [prompts, setPrompts] = useState<PromptInfo[] | null>(null)
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch('/api/mcp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 11, method: 'prompts/list' }),
+      })
+      const data = (await res.json()) as {
+        result?: { prompts?: PromptInfo[] }
+        error?: { message: string }
+      }
+      if (data.result?.prompts) setPrompts(data.result.prompts)
+    } catch {
+      // section stays collapsed
+    }
+  }, [])
+
+  useEffect(() => {
+    const run = async () => {
+      await load()
+    }
+    void run()
+    const onFocus = () => void run()
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [load])
+
+  const getSnippet = `curl -X POST ${origin}/api/mcp \\
+  -H "Authorization: Bearer acme_YOUR_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"jsonrpc":"2.0","id":1,"method":"prompts/get",
+       "params":{"name":"catch_up",
+                 "arguments":{"channel":"engineering","hours":"24"}}}'`
+
+  return (
+    <section aria-labelledby="prompts-heading" className="space-y-3">
+      <div className="flex items-center gap-2.5">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600/15 text-violet-600 dark:text-violet-400">
+          <Sparkles className="h-4 w-4" aria-hidden />
+        </span>
+        <div className="min-w-0">
+          <h2 id="prompts-heading" className="text-sm font-bold">
+            Prompts
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            Ready-made instruction templates — a client fills the arguments, runs the rendered
+            prompt with the tools above, and posts the result back.
+          </p>
+        </div>
+        <Badge variant="outline" className="ml-auto h-5 shrink-0 px-1.5 text-[10px]">
+          {prompts ? `${prompts.length} prompts` : '…'}
+        </Badge>
+      </div>
+
+      {prompts === null ? (
+        <div className="grid gap-2 md:grid-cols-3">
+          <Skeleton className="h-24 rounded-xl" />
+          <Skeleton className="h-24 rounded-xl" />
+          <Skeleton className="h-24 rounded-xl" />
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="grid gap-2 md:grid-cols-3">
+            {prompts.map((p) => (
+              <div
+                key={p.name}
+                className="flex flex-col rounded-xl border border-border p-3 transition-colors duration-150 hover:border-violet-500/40"
+              >
+                <p className="flex items-center gap-1.5 font-mono text-xs font-semibold text-violet-700 dark:text-violet-300">
+                  <Terminal className="h-3 w-3 shrink-0" aria-hidden />
+                  {p.name}
+                </p>
+                <p className="mt-1.5 flex-1 text-[11px] leading-relaxed text-muted-foreground">
+                  {p.description}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {p.arguments.map((arg) => (
+                    <span
+                      key={arg.name}
+                      className={cn(
+                        'rounded bg-muted px-1.5 py-px font-mono text-[9px]',
+                        arg.required ? 'text-violet-600 dark:text-violet-400' : 'text-muted-foreground',
+                      )}
+                      title={arg.description}
+                    >
+                      {arg.name}
+                      {arg.required ? '*' : ''}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="rounded-xl border border-border bg-muted/30 p-3">
+            <p className="mb-2 text-[11px] leading-relaxed text-muted-foreground">
+              <code className="rounded bg-muted px-1 font-mono text-[10px]">prompts/get</code>{' '}
+              renders a template with your arguments into a ready-to-run user message. In Claude
+              Desktop, prompts appear in the slash-command menu.
+            </p>
+            <CodeBlock code={getSnippet} language="bash" highlight />
+          </div>
+        </div>
+      )}
+    </section>
+  )
+}
+
 export function IntegrationsView() {
   const setView = useViewStore((s) => s.setView)
   // The browsing origin is a client-only constant — read it via
@@ -422,6 +539,8 @@ export function IntegrationsView() {
                 <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-medium">resources/list</Badge>
                 <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-medium">resources/read</Badge>
                 <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-medium">resources/templates/list</Badge>
+                <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-medium">prompts/list</Badge>
+                <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-medium">prompts/get</Badge>
                 <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-medium">ping</Badge>
                 <Badge variant="outline" className="h-5 px-1.5 text-[10px]">Bearer auth</Badge>
               </div>
@@ -484,7 +603,10 @@ export function IntegrationsView() {
           {/* 5 ─ resources */}
           <ResourcesSection origin={origin} />
 
-          {/* 6 ─ tool reference */}
+          {/* 6 ─ prompts */}
+          <PromptsSection origin={origin} />
+
+          {/* 7 ─ tool reference */}
           {tools && <ToolReference tools={tools} />}
         </div>
       </div>

@@ -88,6 +88,7 @@ export async function notifyThreadFollowers(args: {
       body,
       readAt: null,
       suppressed: false,
+      snoozedUntil: null,
       createdAt: new Date(),
       channel: { name: channel.name },
       actor: { name: actor.name },

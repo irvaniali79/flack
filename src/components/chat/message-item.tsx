@@ -184,8 +184,8 @@ export const MessageItem = memo(function MessageItem({
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setToolbarVisible(false)
       }}
       className={cn(
-        'group relative flex gap-3 px-4 py-1 transition-colors duration-150 hover:bg-muted/40 md:px-6',
-        compact ? 'py-0.5' : 'mt-2 py-1.5',
+        'group relative flex gap-2.5 px-4 py-1 transition-colors duration-150 hover:bg-muted/40 md:px-6',
+        compact ? 'py-0.5' : 'mt-1.5 py-1',
         mentionsMe &&
           'border-l-[3px] border-amber-400/80 bg-amber-500/5 hover:bg-amber-500/10 dark:border-amber-500/70',
         highlight && 'flash-highlight',
@@ -214,7 +214,7 @@ export const MessageItem = memo(function MessageItem({
       </div>
 
       {/* body */}
-      <div className="min-w-0 flex-1 pb-0.5">
+      <div className="min-w-0 flex-1 pb-0.5 pt-px">
         {!compact && (
           <div className="flex flex-wrap items-baseline gap-x-2">
             <button

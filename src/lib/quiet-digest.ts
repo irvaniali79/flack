@@ -117,3 +117,30 @@ export async function releaseQuietDigests(): Promise<number> {
   }
   return released
 }
+
+/**
+ * Release expired notification snoozes: rows whose snoozedUntil has passed
+ * become visible again (badge + popover) — grouped per user so each client
+ * gets one silent refresh event.
+ */
+export async function releaseSnoozedNotifications(): Promise<number> {
+  const due = await db.notification.groupBy({
+    by: ['userId'],
+    where: { snoozedUntil: { not: null, lte: new Date() } },
+    _count: { _all: true },
+  })
+  if (due.length === 0) return 0
+
+  let released = 0
+  for (const row of due) {
+    const updated = await db.notification.updateMany({
+      where: { userId: row.userId, snoozedUntil: { not: null, lte: new Date() } },
+      data: { snoozedUntil: null },
+    })
+    if (updated.count > 0) {
+      released += updated.count
+      void emitToUsers([row.userId], 'notifications:refresh', {}).catch(() => {})
+    }
+  }
+  return released
+}

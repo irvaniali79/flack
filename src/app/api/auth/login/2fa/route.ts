@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     const code = parsed.data.code
 
     if (verifyTotp(user.totpSecret, code)) {
-      await createSession(user.id)
+      await createSession(user.id, request)
       return { user: serializeUser(user) }
     }
 
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
       const remaining = consumeRecoveryCode(code, user.recoveryCodes)
       if (remaining !== null) {
         await db.user.update({ where: { id: user.id }, data: { recoveryCodes: remaining } })
-        await createSession(user.id)
+        await createSession(user.id, request)
         void writeAudit({
           orgId: user.orgId,
           actorId: user.id,
