@@ -169,6 +169,18 @@
   animation: flash-highlight 2s ease-out forwards;
 }
 
+/* Subtle presence pulse — only while online (scale + halo) */
+@keyframes presence-pulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 oklch(0.696 0.17 162.48 / 0.45); }
+  50% { transform: scale(1.35); box-shadow: 0 0 0 4px oklch(0.696 0.17 162.48 / 0); }
+}
+.presence-pulse {
+  animation: presence-pulse 2.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .presence-pulse { animation: none; }
+}
+
 /* Focus-visible ring in emerald for keyboard nav */
 :focus-visible {
   outline: 2px solid oklch(0.696 0.17 162.48);

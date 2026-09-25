@@ -3,6 +3,8 @@ import { memo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
 import {
+  Bookmark,
+  BookmarkCheck,
   Copy,
   CornerDownRight,
   Download,
@@ -58,11 +60,13 @@ export const MessageItem = memo(function MessageItem({
   compact = false,
   inThread = false,
   highlight = false,
+  entrance = false,
 }: {
   message: MessageDTO
   compact?: boolean
   inThread?: boolean
   highlight?: boolean
+  entrance?: boolean
 }) {
   const me = useChatStore((s) => s.me)
   const users = useChatStore((s) => s.users)
@@ -74,9 +78,12 @@ export const MessageItem = memo(function MessageItem({
   const setImageViewer = useChatStore((s) => s.setImageViewer)
   const setEditingMessageId = useChatStore((s) => s.setEditingMessageId)
   const activeThreadRootId = useChatStore((s) => s.activeThreadRootId)
+  const isSaved = useChatStore((s) => s.savedMessageIds.includes(message.id))
+  const toggleSavedMessage = useChatStore((s) => s.toggleSavedMessage)
 
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [reacting, setReacting] = useState(false)
+  const [toolbarVisible, setToolbarVisible] = useState(false)
 
   const sender = message.sender
   const isMine = !!me && sender?.id === me.id
@@ -120,6 +127,11 @@ export const MessageItem = memo(function MessageItem({
     }
   }
 
+  const toggleSave = () => {
+    toggleSavedMessage(message.id)
+    toast.success(isSaved ? 'Removed from saved items' : 'Saved for later')
+  }
+
   if (deleted) {
     return (
       <div
@@ -135,8 +147,17 @@ export const MessageItem = memo(function MessageItem({
   }
 
   return (
-    <div
+    <motion.div
       id={`message-${message.id}`}
+      initial={entrance ? { opacity: 0, y: 8 } : false}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.15, ease: 'easeOut' }}
+      onMouseEnter={() => setToolbarVisible(true)}
+      onMouseLeave={() => setToolbarVisible(false)}
+      onFocusCapture={() => setToolbarVisible(true)}
+      onBlurCapture={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setToolbarVisible(false)
+      }}
       className={cn(
         'group relative flex gap-3 px-4 py-1 transition-colors duration-150 hover:bg-muted/40 md:px-6',
         compact ? 'py-0.5' : 'mt-2 py-1.5',
@@ -198,17 +219,33 @@ export const MessageItem = memo(function MessageItem({
                 <Pin className="h-3 w-3" aria-hidden /> pinned
               </span>
             )}
+            {isSaved && (
+              <span
+                className="flex items-center gap-0.5 rounded bg-emerald-500/10 px-1.5 py-px text-[10px] font-semibold text-emerald-600 dark:text-emerald-400"
+                title="Saved for later"
+              >
+                <Bookmark className="h-3 w-3" aria-hidden /> Saved
+              </span>
+            )}
           </div>
         )}
 
         {compact && (
-          <time
-            dateTime={message.createdAt}
-            title={formatTimeHover(message.createdAt)}
-            className="mr-1.5 hidden select-none text-[10px] align-baseline text-muted-foreground/0 group-hover:text-muted-foreground sm:inline"
-          >
-            {formatTime(message.createdAt)}
-          </time>
+          <>
+            {isSaved && (
+              <Bookmark
+                className="mr-1.5 inline h-3 w-3 shrink-0 align-baseline text-emerald-500"
+                aria-label="Saved message"
+              />
+            )}
+            <time
+              dateTime={message.createdAt}
+              title={formatTimeHover(message.createdAt)}
+              className="mr-1.5 hidden select-none text-[10px] align-baseline text-muted-foreground/0 group-hover:text-muted-foreground sm:inline"
+            >
+              {formatTime(message.createdAt)}
+            </time>
+          </>
         )}
 
         <MarkdownBody
@@ -273,14 +310,22 @@ export const MessageItem = memo(function MessageItem({
                         onClick={() => void react(reaction.emoji)}
                         aria-label={`React ${reaction.emoji} — ${reaction.count}`}
                         className={cn(
-                          'flex h-7 items-center gap-1 rounded-full border px-2 text-xs font-medium transition-all duration-150',
+                          'flex h-7 items-center gap-1 rounded-full border px-2 text-xs font-medium transition-all duration-150 hover:scale-105 active:scale-95',
                           mine
-                            ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                            ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-700 ring-1 ring-emerald-500/30 dark:text-emerald-300'
                             : 'border-border bg-muted/50 text-foreground/80 hover:border-border hover:bg-muted',
                         )}
                       >
                         <span className="text-sm leading-none">{reaction.emoji}</span>
-                        {reaction.count}
+                        <motion.span
+                          key={reaction.count}
+                          initial={{ scale: 0.5 }}
+                          animate={{ scale: 1 }}
+                          transition={{ type: 'spring', stiffness: 550, damping: 22 }}
+                          className="text-xs font-semibold leading-none"
+                        >
+                          {reaction.count}
+                        </motion.span>
                       </button>
                     </TooltipTrigger>
                     <TooltipContent>
@@ -328,11 +373,15 @@ export const MessageItem = memo(function MessageItem({
         )}
       </div>
 
-      {/* hover toolbar */}
-      <div
+      {/* hover toolbar — framer fade/slide in on hover or focus */}
+      <motion.div
+        initial={{ opacity: 0, y: -4 }}
+        animate={toolbarVisible ? { opacity: 1, y: 0 } : { opacity: 0, y: -4 }}
+        transition={{ duration: 0.15, ease: 'easeOut' }}
         className={cn(
-          'absolute -top-3 right-4 z-10 flex items-center gap-0.5 rounded-lg border border-border bg-popover p-0.5 opacity-0 shadow-md transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100 md:right-6',
+          'absolute -top-3 right-4 z-10 flex items-center gap-0.5 rounded-lg border border-border bg-popover p-0.5 shadow-md md:right-6',
           inThread && 'right-2',
+          !toolbarVisible && 'pointer-events-none',
         )}
       >
         {QUICK_REACTIONS.map((emoji) => (
@@ -393,6 +442,21 @@ export const MessageItem = memo(function MessageItem({
               )}
               {message.isPinned ? 'Unpin message' : 'Pin message'}
             </DropdownMenuItem>
+            <DropdownMenuItem
+              className={cn(
+                'gap-2',
+                isSaved &&
+                  'text-emerald-600 focus:text-emerald-600 dark:text-emerald-400 dark:focus:text-emerald-400',
+              )}
+              onClick={toggleSave}
+            >
+              {isSaved ? (
+                <BookmarkCheck className="h-4 w-4" aria-hidden />
+              ) : (
+                <Bookmark className="h-4 w-4" aria-hidden />
+              )}
+              {isSaved ? 'Unsave message' : 'Save message'}
+            </DropdownMenuItem>
             <DropdownMenuItem className="gap-2" onClick={() => void copyText()}>
               <Copy className="h-4 w-4" aria-hidden /> Copy text
             </DropdownMenuItem>
@@ -420,7 +484,7 @@ export const MessageItem = memo(function MessageItem({
             )}
           </DropdownMenuContent>
         </DropdownMenu>
-      </div>
+      </motion.div>
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent className="rounded-xl">
@@ -449,6 +513,6 @@ export const MessageItem = memo(function MessageItem({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </motion.div>
   )
 })

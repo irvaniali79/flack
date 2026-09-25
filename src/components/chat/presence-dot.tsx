@@ -12,7 +12,7 @@ export function PresenceDot({
     <span
       className={cn(
         'block h-3 w-3 rounded-full border-2 border-background dark:border-zinc-950',
-        online ? 'bg-emerald-500' : 'bg-zinc-400 dark:bg-zinc-600',
+        online ? 'bg-emerald-500 presence-pulse' : 'bg-zinc-400 dark:bg-zinc-600',
         className,
       )}
       role="img"

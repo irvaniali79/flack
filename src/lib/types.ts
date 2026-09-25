@@ -102,12 +102,26 @@ export interface NotificationDTO {
 
 // ─── Workflows ───────────────────────────────────────────────────────────────
 
-export type WorkflowTriggerType = 'button' | 'reaction' | 'message_posted' | 'webhook'
+export type WorkflowTriggerType =
+  | 'button'
+  | 'reaction'
+  | 'message_posted'
+  | 'webhook'
+  | 'schedule'
 
 export interface WorkflowTriggerConfig {
   channelId?: string
   emoji?: string
   keyword?: string
+  // ── schedule triggers ──
+  /** 'interval' = every N minutes · 'daily' = every day at HH:MM (server-local) */
+  scheduleKind?: 'interval' | 'daily'
+  /** interval cadence in minutes (5–1440), required when scheduleKind === 'interval' */
+  minutes?: number
+  /** daily fire time "HH:MM" 24h, required when scheduleKind === 'daily' */
+  time?: string
+  /** ISO timestamp of the next scheduled fire — managed server-side, stored in this JSON blob */
+  nextRunAt?: string
 }
 
 export type WorkflowStepType =

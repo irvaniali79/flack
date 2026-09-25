@@ -19,6 +19,7 @@ import {
 } from './socket'
 
 const DRAFT_KEY = 'acme-drafts'
+const SAVED_KEY = 'acme-saved-messages'
 
 function loadDrafts(): Record<string, string> {
   try {
@@ -37,6 +38,41 @@ function saveDrafts(drafts: Record<string, string>) {
     // ignore
   }
 }
+
+// ── saved messages (bookmarks) — ids persisted in localStorage ────────────────
+
+function loadSavedIds(): string[] {
+  try {
+    const raw = localStorage.getItem(SAVED_KEY)
+    const parsed = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? parsed.filter((id) => typeof id === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function saveIds(ids: string[]) {
+  try {
+    localStorage.setItem(SAVED_KEY, JSON.stringify(ids))
+  } catch {
+    // ignore
+  }
+}
+
+/** Find a message DTO among the currently loaded channels/threads. */
+function findLoadedMessage(state: ChatState, id: string): MessageDTO | null {
+  for (const list of Object.values(state.messagesByChannel)) {
+    const hit = (list ?? []).find((m) => m.id === id)
+    if (hit) return hit
+  }
+  for (const replies of Object.values(state.threadReplies)) {
+    const hit = (replies ?? []).find((m) => m.id === id)
+    if (hit) return hit
+  }
+  return null
+}
+
+let savedRefreshInFlight = false
 
 export interface BootstrapResponse {
   me: UserDTO
@@ -79,9 +115,19 @@ interface ChatState {
   // ── drafts (persisted) ────────────────────────────────────────────────────
   drafts: Record<string, string>
 
+  // ── saved messages (bookmarks, ids persisted) ─────────────────────────────
+  savedMessageIds: string[]
+  /** Cache of saved message DTOs for messages not currently loaded. */
+  savedExtras: Record<string, MessageDTO>
+  toggleSavedMessage: (id: string) => void
+  isSaved: (id: string) => boolean
+  /** Re-fetch saved messages that aren't in any loaded channel (lazy, fresh). */
+  refreshSavedExtras: () => Promise<void>
+
   // ── ui state ──────────────────────────────────────────────────────────────
   searchOpen: boolean
   searchSeed: string
+  shortcutsOpen: boolean
   createChannelOpen: boolean
   browseChannelsOpen: boolean
   newDmOpen: boolean
@@ -145,6 +191,7 @@ interface ChatState {
 
   // ── ui setters ────────────────────────────────────────────────────────────
   setSearchOpen: (open: boolean, seed?: string) => void
+  setShortcutsOpen: (open: boolean) => void
   setCreateChannelOpen: (open: boolean) => void
   setBrowseChannelsOpen: (open: boolean) => void
   setNewDmOpen: (open: boolean) => void
@@ -211,8 +258,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   drafts: typeof window !== 'undefined' ? loadDrafts() : {},
 
+  savedMessageIds: typeof window !== 'undefined' ? loadSavedIds() : [],
+  savedExtras: {},
+
   searchOpen: false,
   searchSeed: '',
+  shortcutsOpen: false,
   createChannelOpen: false,
   browseChannelsOpen: false,
   newDmOpen: false,
@@ -576,6 +627,55 @@ export const useChatStore = create<ChatState>((set, get) => ({
     })
   },
 
+  // ── saved messages (bookmarks) ────────────────────────────────────────────
+  toggleSavedMessage: (id) => {
+    set((s) => {
+      const wasSaved = s.savedMessageIds.includes(id)
+      const ids = wasSaved
+        ? s.savedMessageIds.filter((x) => x !== id)
+        : [id, ...s.savedMessageIds]
+      saveIds(ids)
+      let extras = s.savedExtras
+      if (!wasSaved) {
+        // snapshot the DTO so the saved view keeps working after the channel unloads
+        const found = findLoadedMessage(s, id)
+        if (found) extras = { ...s.savedExtras, [id]: found }
+      } else {
+        const rest = { ...s.savedExtras }
+        delete rest[id]
+        extras = rest
+      }
+      return { savedMessageIds: ids, savedExtras: extras }
+    })
+  },
+
+  isSaved: (id) => get().savedMessageIds.includes(id),
+
+  refreshSavedExtras: async () => {
+    if (savedRefreshInFlight) return
+    savedRefreshInFlight = true
+    try {
+      const ids = get().savedMessageIds.filter((id) => !findLoadedMessage(get(), id))
+      const results = await Promise.all(
+        ids.map(async (id) => {
+          try {
+            const data = await api<{ message: MessageDTO }>(`/api/messages/${id}`)
+            return [id, data.message] as const
+          } catch {
+            return null
+          }
+        }),
+      )
+      set((s) => {
+        const extras = { ...s.savedExtras }
+        for (const entry of results) if (entry) extras[entry[0]] = entry[1]
+        return { savedExtras: extras }
+      })
+    } finally {
+      savedRefreshInFlight = false
+    }
+  },
+
   updateMe: async (patch) => {
     const user = await api<UserDTO>('/api/me', { method: 'PATCH', body: patch })
     set((s) => ({
@@ -746,6 +846,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   // ── ui setters ─────────────────────────────────────────────────────────────
   setSearchOpen: (open, seed = '') => set({ searchOpen: open, searchSeed: seed }),
+  setShortcutsOpen: (open) => set({ shortcutsOpen: open }),
   setCreateChannelOpen: (open) => set({ createChannelOpen: open }),
   setBrowseChannelsOpen: (open) => set({ browseChannelsOpen: open }),
   setNewDmOpen: (open) => set({ newDmOpen: open }),

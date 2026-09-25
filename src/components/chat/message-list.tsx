@@ -8,6 +8,7 @@ import { getActiveChannel, useChatStore } from '@/lib/store'
 import type { MessageDTO } from '@/lib/types'
 import { dayLabel } from '@/lib/time'
 import { MessageItem } from './message-item'
+import { ChannelIntro, CompactBeginning } from './channel-intro'
 
 const GROUP_WINDOW_MS = 5 * 60 * 1000
 
@@ -30,6 +31,7 @@ export function MessageList() {
 
 function MessageListInner({ channelId }: { channelId: string | null }) {
   const messages = useChatStore((s) => (channelId ? s.messagesByChannel[channelId] : undefined)) ?? []
+  const channel = useChatStore((s) => (channelId ? s.channels.find((c) => c.id === channelId) ?? null : null))
   const loading = useChatStore((s) => (channelId ? !!s.messagesLoading[channelId] : false))
   const loadingOlder = useChatStore((s) => (channelId ? !!s.loadingOlder[channelId] : false))
   const hasMore = useChatStore((s) => (channelId ? !!s.hasMoreByChannel[channelId] : false))
@@ -45,6 +47,9 @@ function MessageListInner({ channelId }: { channelId: string | null }) {
   const [newArrival, setNewArrival] = useState(false)
   const [flashId, setFlashId] = useState<string | null>(null)
   const lastMessageCountRef = useRef(0)
+  // id of the newest message that arrived after the initial load (entrance anim)
+  const [entranceId, setEntranceId] = useState<string | null>(null)
+  const prevLastIdRef = useRef<string | null>(null)
 
   // ── build render list (day separators, grouping, unread divider) ─────────
   const entries = useMemo<RenderEntry[]>(() => {
@@ -107,6 +112,18 @@ function MessageListInner({ channelId }: { channelId: string | null }) {
     // older messages prepended — keep scroll position stable
     if (count < prevCount) lastMessageCountRef.current = count
   }, [messages, me, pinnedToBottom])
+
+  // ── entrance animation for the newest message ───────────────────────────────
+  // Only when the last message id CHANGES after the initial load — prepending
+  // older pages never touches the tail, so pagination stays jank-free.
+  useLayoutEffect(() => {
+    const last = messages[messages.length - 1]
+    const prevLastId = prevLastIdRef.current
+    prevLastIdRef.current = last?.id ?? null
+    if (last && prevLastId && last.id !== prevLastId) {
+      requestAnimationFrame(() => setEntranceId(last.id))
+    }
+  }, [messages])
 
   const handleScroll = () => {
     const container = scrollRef.current
@@ -184,16 +201,21 @@ function MessageListInner({ channelId }: { channelId: string | null }) {
         role="log"
         aria-label="Messages"
       >
-        {/* load older indicator */}
-        <div className="flex justify-center py-2">
-          {loadingOlder ? (
+        {/* channel intro header / load-older indicator */}
+        {loadingOlder ? (
+          <div className="flex justify-center py-2">
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-label="Loading older messages" />
-          ) : hasMore ? (
-            <span className="text-[10px] text-muted-foreground/60">scroll up for older messages</span>
-          ) : messages.length > 0 ? (
-            <span className="text-[10px] font-medium text-muted-foreground/60">This is the beginning</span>
-          ) : null}
-        </div>
+          </div>
+        ) : hasMore ? (
+          <div className="py-2">
+            <CompactBeginning />
+            <p className="mt-1 text-center text-[10px] text-muted-foreground/60">
+              scroll up for older messages
+            </p>
+          </div>
+        ) : !loading && channel ? (
+          <ChannelIntro key={channelId ?? 'none'} channel={channel} firstMessage={messages[0]} />
+        ) : null}
 
         {messages.length === 0 && !loading ? (
           <div className="flex flex-col items-center gap-2 px-6 py-16 text-center">
@@ -230,6 +252,7 @@ function MessageListInner({ channelId }: { channelId: string | null }) {
                 message={entry.message!}
                 compact={entry.compact}
                 highlight={flashId === entry.message!.id}
+                entrance={entranceId === entry.message!.id}
               />
             )
           })

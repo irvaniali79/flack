@@ -1,6 +1,8 @@
 // Shared helpers for humanizing workflow triggers in the UI.
-import { MessageSquarePlus, Play, SmilePlus, Webhook } from 'lucide-react'
-import type { ChannelDTO, WorkflowDTO } from '@/lib/types'
+import { formatDistanceToNow, parseISO } from 'date-fns'
+import { CalendarClock, MessageSquarePlus, Play, SmilePlus, Webhook } from 'lucide-react'
+import type { ChannelDTO, WorkflowDTO, WorkflowTriggerConfig } from '@/lib/types'
+import { scheduleSentence } from '@/lib/workflows/schedule'
 
 export function humanizeTrigger(
   triggerType: WorkflowDTO['triggerType'],
@@ -23,6 +25,8 @@ export function humanizeTrigger(
     }
     case 'webhook':
       return 'When an external webhook is received'
+    case 'schedule':
+      return `When the schedule fires — ${scheduleSentence(config)}`
     default:
       return 'Manual workflow'
   }
@@ -38,7 +42,28 @@ export function triggerIconFor(type: WorkflowDTO['triggerType']) {
       return MessageSquarePlus
     case 'webhook':
       return Webhook
+    case 'schedule':
+      return CalendarClock
     default:
       return Play
   }
+}
+
+/**
+ * Relative label for a schedule workflow's next fire time
+ * ("in 5 minutes", "due momentarily" when the tick is imminent).
+ * Returns null when there is nothing useful to show.
+ */
+export function nextRunLabel(
+  triggerType: WorkflowDTO['triggerType'],
+  config: WorkflowTriggerConfig | undefined,
+  enabled: boolean,
+): string | null {
+  if (triggerType !== 'schedule' || !enabled || !config?.nextRunAt) return null
+  const date = parseISO(config.nextRunAt)
+  if (Number.isNaN(date.getTime())) return null
+  const ms = date.getTime() - Date.now()
+  if (ms <= 0) return 'due momentarily'
+  if (ms < 45_000) return 'in less than a minute'
+  return formatDistanceToNow(date, { addSuffix: true })
 }

@@ -2,6 +2,7 @@
 import { useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Loader2, X } from 'lucide-react'
+import { toast } from 'sonner'
 import { useChatStore } from '@/lib/store'
 import { useViewStore } from '@/lib/view-store'
 import { useIsMobile } from '@/hooks/use-mobile'
@@ -20,6 +21,8 @@ import { NewDmDialog } from './dialogs/new-dm'
 import { ProfileDialog } from './dialogs/profile-dialog'
 import { SettingsDialog } from './dialogs/settings-dialog'
 import { ImageViewer } from './dialogs/image-viewer'
+import { ShortcutsDialog } from './shortcuts-dialog'
+import { SavedView } from './saved-view'
 import { WorkflowsView } from './workflows/workflows-view'
 import { AdminView } from './admin/admin-view'
 
@@ -63,6 +66,50 @@ export function ChatApp() {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault()
         setSearchOpen(true)
+        return
+      }
+      if ((event.metaKey || event.ctrlKey) && event.key === '/') {
+        event.preventDefault()
+        const state = useChatStore.getState()
+        state.setShortcutsOpen(!state.shortcutsOpen)
+        return
+      }
+      // Alt+↑/↓ — previous/next channel in sidebar order (channels, then DMs)
+      if (event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey &&
+          (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+        event.preventDefault()
+        const state = useChatStore.getState()
+        const order = [
+          ...state.channels.filter((c) => c.kind !== 'dm' && c.kind !== 'group_dm' && c.isMember),
+          ...state.channels.filter((c) => c.kind === 'dm' || c.kind === 'group_dm'),
+        ]
+        if (order.length === 0) return
+        const current = order.findIndex((c) => c.id === state.activeChannelId)
+        const next =
+          event.key === 'ArrowDown'
+            ? (current + 1) % order.length
+            : (current - 1 + order.length) % order.length
+        void state.openChannel(order[next].id)
+        return
+      }
+      // Alt+Shift+↑/↓ — previous/next channel with unread messages
+      if (event.altKey && event.shiftKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+        event.preventDefault()
+        const state = useChatStore.getState()
+        const order = [
+          ...state.channels.filter((c) => c.kind !== 'dm' && c.kind !== 'group_dm' && c.isMember),
+          ...state.channels.filter((c) => c.kind === 'dm' || c.kind === 'group_dm'),
+        ].filter((c) => c.unread > 0)
+        if (order.length === 0) {
+          toast.info('No unread channels — you’re all caught up ✨')
+          return
+        }
+        const current = order.findIndex((c) => c.id === state.activeChannelId)
+        const next =
+          event.key === 'ArrowDown'
+            ? (current + 1) % order.length
+            : (current - 1 + order.length) % order.length
+        void state.openChannel(order[next].id)
         return
       }
       if (event.key === 'Escape') {
@@ -136,6 +183,8 @@ export function ChatApp() {
           <WorkflowsView />
         ) : view === 'admin' ? (
           <AdminView />
+        ) : view === 'saved' ? (
+          <SavedView />
         ) : (
           <>
             <ChannelHeader />
@@ -161,6 +210,7 @@ export function ChatApp() {
       <ProfileDialog />
       <SettingsDialog />
       <ImageViewer />
+      <ShortcutsDialog />
     </div>
   )
 }

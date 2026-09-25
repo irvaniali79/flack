@@ -5,6 +5,7 @@ import {
   ArrowDown,
   ArrowUp,
   Bot,
+  CalendarClock,
   GripVertical,
   MessageSquarePlus,
   Plus,
@@ -40,7 +41,15 @@ import {
 } from '@/components/ui/select'
 import { api } from '@/lib/api'
 import { useChatStore } from '@/lib/store'
-import type { WorkflowDTO, WorkflowStep, WorkflowStepType, WorkflowTriggerType } from '@/lib/types'
+import { cn } from '@/lib/utils'
+import type {
+  WorkflowDTO,
+  WorkflowStep,
+  WorkflowStepType,
+  WorkflowTriggerConfig,
+  WorkflowTriggerType,
+} from '@/lib/types'
+import { INTERVAL_PRESETS } from '@/lib/workflows/schedule'
 import { humanizeTrigger } from './trigger-label'
 
 const EMOJI_QUICK_PICKS = ['👍', '✅', '🎉', '❤️', '🚀', '👀', '😄', '🙏', '🙌', '⚡']
@@ -59,9 +68,12 @@ interface BuilderForm {
   name: string
   description: string
   triggerType: WorkflowTriggerType
-  triggerConfig: { channelId?: string; emoji?: string; keyword?: string }
+  triggerConfig: WorkflowTriggerConfig
   steps: WorkflowStep[]
 }
+
+const DEFAULT_SCHEDULE_MINUTES = 15
+const DEFAULT_SCHEDULE_TIME = '09:00'
 
 function emptyForm(): BuilderForm {
   return {
@@ -78,7 +90,8 @@ function formFromWorkflow(workflow: WorkflowDTO): BuilderForm {
     name: workflow.name,
     description: workflow.description ?? '',
     triggerType: workflow.triggerType,
-    triggerConfig: { ...workflow.triggerConfig },
+    // nextRunAt is server-managed — never round-trip it back on save
+    triggerConfig: { ...workflow.triggerConfig, nextRunAt: undefined },
     steps: workflow.steps.map((step) => ({
       ...step,
       config: { ...step.config },
@@ -180,6 +193,13 @@ export function WorkflowBuilder({
 
   const validate = (): string | null => {
     if (!form.name.trim()) return 'Give the workflow a name'
+    if (form.triggerType === 'schedule') {
+      if (form.triggerConfig.scheduleKind === 'interval' && !form.triggerConfig.minutes)
+        return 'Pick how often the schedule should fire'
+      if (form.triggerConfig.scheduleKind === 'daily' && !form.triggerConfig.time)
+        return 'Pick a daily time for the schedule'
+      if (!form.triggerConfig.scheduleKind) return 'Choose “Every N minutes” or “Daily at a time”'
+    }
     for (const [index, step] of form.steps.entries()) {
       const n = index + 1
       if (step.type === 'post_message' && !step.config.body?.trim())
@@ -208,7 +228,8 @@ export function WorkflowBuilder({
         name: form.name.trim(),
         description: form.description.trim() || null,
         triggerType: form.triggerType,
-        triggerConfig: form.triggerConfig,
+        // nextRunAt is computed server-side on save / param change
+        triggerConfig: { ...form.triggerConfig, nextRunAt: undefined },
         steps: form.steps.map((step) => ({
           id: step.id,
           type: step.type,
@@ -292,7 +313,20 @@ export function WorkflowBuilder({
                   <Select
                     value={form.triggerType}
                     onValueChange={(value) =>
-                      patch({ triggerType: value as WorkflowTriggerType })
+                      patch({
+                        triggerType: value as WorkflowTriggerType,
+                        // Seed sensible schedule defaults the first time it's picked
+                        ...(value === 'schedule' && !form.triggerConfig.scheduleKind
+                          ? {
+                              triggerConfig: {
+                                ...form.triggerConfig,
+                                scheduleKind: 'interval' as const,
+                                minutes: DEFAULT_SCHEDULE_MINUTES,
+                                time: form.triggerConfig.time ?? DEFAULT_SCHEDULE_TIME,
+                              },
+                            }
+                          : {}),
+                      })
                     }
                   >
                     <SelectTrigger className="w-full rounded-lg" aria-label="Trigger type">
@@ -303,6 +337,7 @@ export function WorkflowBuilder({
                       <SelectItem value="reaction">A reaction is added</SelectItem>
                       <SelectItem value="button">Someone clicks Run now</SelectItem>
                       <SelectItem value="webhook">A webhook is received</SelectItem>
+                      <SelectItem value="schedule">A schedule fires it</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -385,6 +420,106 @@ export function WorkflowBuilder({
                         </button>
                       ))}
                     </div>
+                  </div>
+                )}
+
+                {form.triggerType === 'schedule' && (
+                  <div className="space-y-3 sm:col-span-2">
+                    <div
+                      className="grid grid-cols-2 gap-1 rounded-lg border border-border bg-muted/50 p-1"
+                      role="radiogroup"
+                      aria-label="Schedule kind"
+                    >
+                      {(
+                        [
+                          { kind: 'interval', label: 'Every N minutes' },
+                          { kind: 'daily', label: 'Daily at a time' },
+                        ] as const
+                      ).map(({ kind, label }) => (
+                        <button
+                          key={kind}
+                          type="button"
+                          role="radio"
+                          aria-checked={form.triggerConfig.scheduleKind === kind}
+                          onClick={() =>
+                            patch({
+                              triggerConfig: {
+                                ...form.triggerConfig,
+                                scheduleKind: kind,
+                                ...(kind === 'interval' &&
+                                !form.triggerConfig.minutes
+                                  ? { minutes: DEFAULT_SCHEDULE_MINUTES }
+                                  : {}),
+                                ...(kind === 'daily' && !form.triggerConfig.time
+                                  ? { time: DEFAULT_SCHEDULE_TIME }
+                                  : {}),
+                              },
+                            })
+                          }
+                          className={cn(
+                            'flex h-8 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-semibold transition-colors duration-150',
+                            form.triggerConfig.scheduleKind === kind
+                              ? 'bg-background text-emerald-700 shadow-sm dark:text-emerald-400'
+                              : 'text-muted-foreground hover:text-foreground',
+                          )}
+                        >
+                          <CalendarClock className="h-3.5 w-3.5" aria-hidden />
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {form.triggerConfig.scheduleKind === 'interval' ? (
+                      <div className="space-y-1.5">
+                        <Label>Interval</Label>
+                        <Select
+                          value={String(form.triggerConfig.minutes ?? DEFAULT_SCHEDULE_MINUTES)}
+                          onValueChange={(value) =>
+                            patch({
+                              triggerConfig: {
+                                ...form.triggerConfig,
+                                minutes: Number(value),
+                              },
+                            })
+                          }
+                        >
+                          <SelectTrigger className="w-full rounded-lg sm:w-56" aria-label="Interval">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="rounded-xl">
+                            {INTERVAL_PRESETS.map((minutes) => (
+                              <SelectItem key={minutes} value={String(minutes)}>
+                                Every {minutes} minutes
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          Minimum 5 minutes — keeps the sandbox friendly.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        <Label htmlFor="trigger-schedule-time">Time</Label>
+                        <Input
+                          id="trigger-schedule-time"
+                          type="time"
+                          value={form.triggerConfig.time ?? DEFAULT_SCHEDULE_TIME}
+                          onChange={(event) =>
+                            patch({
+                              triggerConfig: {
+                                ...form.triggerConfig,
+                                time: event.target.value || undefined,
+                              },
+                            })
+                          }
+                          className="w-full rounded-lg sm:w-40"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Fires every day at this time (server timezone).
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

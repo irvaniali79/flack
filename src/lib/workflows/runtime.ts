@@ -10,7 +10,12 @@ import { HttpError } from '@/lib/auth'
 import { emitAgentTyping, emitToChannel } from '@/lib/realtime-server'
 import { serializeMessage } from '@/lib/serialize'
 import type { MessageFull } from '@/lib/serialize'
-import type { WorkflowRunLog, WorkflowStep } from '@/lib/types'
+import type { WorkflowRunLog, WorkflowStep, WorkflowTriggerConfig } from '@/lib/types'
+import {
+  computeNextRunAt,
+  parseNextRunAt,
+  scheduleSentence,
+} from '@/lib/workflows/schedule'
 
 const BOT_EMAIL = 'workflows@acme.local'
 const TRUNCATE_LABEL = 48
@@ -31,6 +36,8 @@ export interface WorkflowTriggerContext {
   actorId?: string | null
   emoji?: string | null
   webhook?: unknown
+  /** True when the run was started by the scheduler (cron tick). */
+  scheduled?: boolean
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -187,6 +194,7 @@ export async function runWorkflow(
         actorId: ctx.actorId ?? null,
         emoji: ctx.emoji ?? null,
         webhook: ctx.webhook ?? null,
+        scheduled: ctx.scheduled ?? false,
       }),
       logs: '[]',
     },
@@ -329,9 +337,11 @@ async function executeRun(
               ? `\n\n---\nTrigger context: a message in #${ctx.message.channel.name} by ${
                   ctx.message.sender?.name ?? 'someone'
                 }:\n"${truncate(ctx.message.body, 400)}"`
-              : ctx.webhook !== undefined
-                ? '\n\n---\nTrigger context: an incoming webhook.'
-                : ''
+              : ctx.scheduled
+                ? '\n\n---\nTrigger context: a scheduled (cron) automatic run.'
+                : ctx.webhook !== undefined
+                  ? '\n\n---\nTrigger context: an incoming webhook.'
+                  : ''
             void emitAgentTyping(channel.id, agent.user.name).catch(() => {})
 
             let reply = ''
@@ -492,4 +502,63 @@ export async function runWorkflowNow(workflowId: string, actorUser: User): Promi
     actor: { id: actorUser.id, name: actorUser.name },
     actorId: actorUser.id,
   })
+}
+
+// ─── Scheduled (cron) triggers ──────────────────────────────────────────────
+
+/**
+ * One scheduler tick: fire every ENABLED schedule workflow whose
+ * triggerConfig.nextRunAt is due (<= now), then persist the next fire time
+ * (interval: firedAt + minutes · daily: next occurrence of HH:MM, server-local).
+ * nextRunAt lives inside the triggerConfig JSON blob — the Prisma schema is
+ * untouched by design. Robust try/catch per workflow; never throws.
+ * Returns the number of workflows fired.
+ */
+export async function runScheduledTick(): Promise<number> {
+  const now = new Date()
+  let fired = 0
+
+  let workflows: Workflow[]
+  try {
+    workflows = await db.workflow.findMany({
+      where: { enabled: true, triggerType: 'schedule' },
+    })
+  } catch (err) {
+    console.error('[workflows] scheduled tick: query failed:', err)
+    return 0
+  }
+
+  for (const workflow of workflows) {
+    try {
+      const config = safeParse<WorkflowTriggerConfig>(workflow.triggerConfig, {})
+      const nextRunAt = parseNextRunAt(config)
+      if (!nextRunAt || nextRunAt.getTime() > now.getTime()) continue
+
+      await runWorkflow(workflow, {
+        triggerLabel: `Scheduled — ${scheduleSentence(config)}`,
+        scheduled: true,
+      })
+      fired += 1
+
+      // Advance the timer AFTER the run row exists, so the next tick can't
+      // double-fire while execution is still in the background.
+      const firedAt = new Date()
+      const computed = computeNextRunAt(config, firedAt)
+      if (!computed) {
+        console.warn(
+          `[workflows] scheduled tick: invalid config on "${workflow.name}" — next run parked +1h`,
+        )
+      }
+      // Invalid/legacy config: park an hour out so we never hot-loop.
+      const next = computed ?? new Date(firedAt.getTime() + 60 * 60_000)
+      await db.workflow.update({
+        where: { id: workflow.id },
+        data: { triggerConfig: JSON.stringify({ ...config, nextRunAt: next.toISOString() }) },
+      })
+    } catch (err) {
+      console.error(`[workflows] scheduled tick failed for "${workflow.name}":`, err)
+    }
+  }
+
+  return fired
 }

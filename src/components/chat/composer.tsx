@@ -1,22 +1,29 @@
 'use client'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
+import type { LucideIcon } from 'lucide-react'
 import {
   Bold,
   Check,
   Code,
+  Drama,
   FileUp,
+  Info,
   Italic,
+  Laugh,
   Link as LinkIcon,
   List,
   ListOrdered,
   Loader2,
   Paperclip,
   Quote,
+  Slash,
   Smile,
   Sparkles,
   Strikethrough,
+  Table,
   TextQuote,
+  Undo,
   X,
 } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -66,12 +73,94 @@ export function TypingIndicator({ channelId }: { channelId: string }) {
   )
 }
 
-// ─── mention / channel menus ─────────────────────────────────────────────────
+// ─── mention / channel / slash menus ───────────────────────────────────────
 
 interface MenuState {
-  kind: 'mention' | 'channel'
+  kind: 'mention' | 'channel' | 'slash'
   query: string
   start: number
+}
+
+interface SlashCommand {
+  command: string
+  args?: string
+  description: string
+  icon: LucideIcon
+}
+
+const SLASH_COMMANDS: SlashCommand[] = [
+  { command: '/me', args: '<text>', description: 'Send an italic action message', icon: Drama },
+  { command: '/shrug', description: 'Appends ¯\\_(ツ)_/¯ to the message', icon: Laugh },
+  { command: '/tableflip', description: 'Appends (╯°□°)╯︵ ┻━┻', icon: Table },
+  { command: '/unflip', description: 'Appends ┬─┬ ノ( ゜-゜ノ)', icon: Undo },
+  { command: '/topic', args: '<text>', description: 'Update this channel’s topic', icon: Info },
+]
+
+function SlashMenu({
+  commands,
+  activeIndex,
+  onSelect,
+  onClose,
+}: {
+  commands: SlashCommand[]
+  activeIndex: number
+  onSelect: (command: string) => void
+  onClose: () => void
+}) {
+  return (
+    <div className="absolute bottom-full left-0 z-30 mb-2 w-72 overflow-hidden rounded-xl border border-border bg-popover shadow-xl">
+      <p className="border-b border-border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+        Commands
+      </p>
+      <div className="max-h-60 overflow-y-auto p-1">
+        {commands.map((entry, index) => {
+          const Icon = entry.icon
+          return (
+            <button
+              key={entry.command}
+              type="button"
+              className={cn(
+                'flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors duration-150',
+                activeIndex === index ? 'bg-accent' : 'hover:bg-accent',
+              )}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => onSelect(entry.command)}
+            >
+              <span
+                className={cn(
+                  'flex h-6 w-6 shrink-0 items-center justify-center rounded-md',
+                  activeIndex === index
+                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                    : 'bg-muted text-muted-foreground',
+                )}
+                aria-hidden
+              >
+                <Icon className="h-3.5 w-3.5" />
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate font-mono text-sm font-semibold">
+                  {entry.command}
+                  {entry.args && <span className="font-sans font-normal text-muted-foreground"> {entry.args}</span>}
+                </span>
+                <span className="block truncate text-[11px] text-muted-foreground">{entry.description}</span>
+              </span>
+            </button>
+          )
+        })}
+        {commands.length === 0 && (
+          <p className="px-3 py-3 text-center text-xs text-muted-foreground">No matching commands</p>
+        )}
+      </div>
+      <button
+        type="button"
+        className="w-full border-t border-border px-3 py-1.5 text-left text-[11px] text-muted-foreground hover:bg-accent"
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={onClose}
+      >
+        Esc to dismiss
+      </button>
+    </div>
+  )
 }
 
 function MentionMenu({
@@ -209,6 +298,7 @@ export function Composer({ parentId, placeholder }: { parentId?: string; placeho
   const sendMessage = useChatStore((s) => s.sendMessage)
   const editMessage = useChatStore((s) => s.editMessage)
   const emitTyping = useChatStore((s) => s.emitTyping)
+  const updateChannel = useChatStore((s) => s.updateChannel)
   const drafts = useChatStore((s) => s.drafts)
   const setDraft = useChatStore((s) => s.setDraft)
   const editingMessageId = useChatStore((s) => s.editingMessageId)
@@ -223,6 +313,7 @@ export function Composer({ parentId, placeholder }: { parentId?: string; placeho
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [menuIndex, setMenuIndex] = useState(0)
   const [dragging, setDragging] = useState(false)
+  const [focused, setFocused] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const lastTypingEmit = useRef(0)
@@ -272,6 +363,15 @@ export function Composer({ parentId, placeholder }: { parentId?: string; placeho
       .slice(0, 7)
   }, [menu, channels])
 
+  const slashFiltered = useMemo(() => {
+    if (!menu || menu.kind !== 'slash') return []
+    const q = menu.query.toLowerCase()
+    if (!q) return SLASH_COMMANDS
+    return SLASH_COMMANDS.filter(
+      (entry) => entry.command.slice(1).toLowerCase().startsWith(q),
+    )
+  }, [menu])
+
   const autosize = () => {
     const el = textareaRef.current
     if (!el) return
@@ -283,6 +383,13 @@ export function Composer({ parentId, placeholder }: { parentId?: string; placeho
 
   const detectMenu = (value: string, caret: number) => {
     const before = value.slice(0, caret)
+    // slash commands — only while the caret is inside the leading command token
+    const slashMatch = /^\/([a-z]*)$/i.exec(before)
+    if (slashMatch) {
+      setMenu({ kind: 'slash', query: slashMatch[1], start: 0 })
+      setMenuIndex(0)
+      return
+    }
     const mentionMatch = /(^|\s)@([a-zA-Z0-9_]*)$/.exec(before)
     if (mentionMatch) {
       setMenu({ kind: 'mention', query: mentionMatch[2], start: caret - mentionMatch[2].length - 1 })
@@ -371,6 +478,21 @@ export function Composer({ parentId, placeholder }: { parentId?: string; placeho
     })
   }
 
+  const selectCommand = (command: string) => {
+    if (!menu) return
+    const el = textareaRef.current
+    // strip the partial command token, keep anything after it
+    const rest = text.replace(/^\/\S*\s?/, '')
+    const next = `${command} ${rest}`
+    setMenu(null)
+    handleChange(next)
+    requestAnimationFrame(() => {
+      const caret = command.length + 1
+      el?.focus()
+      el?.setSelectionRange(caret, caret)
+    })
+  }
+
   const uploadFiles = async (list: FileList | File[]) => {
     for (const file of Array.from(list)) {
       if (file.size > 25 * 1024 * 1024) {
@@ -389,6 +511,62 @@ export function Composer({ parentId, placeholder }: { parentId?: string; placeho
     }
   }
 
+  const clearComposer = () => {
+    setText('')
+    setDraft(draftKey, '')
+    setFiles([])
+    requestAnimationFrame(() => {
+      const el = textareaRef.current
+      if (el) {
+        el.style.height = 'auto'
+        el.focus()
+      }
+    })
+  }
+
+  // ── slash commands — returns true when the send was consumed ────────────
+  const runSlashCommand = async (raw: string): Promise<boolean> => {
+    const match = /^\/([a-z]+)(?:\s+([\s\S]*))?$/i.exec(raw)
+    if (!match) return false
+    const name = match[1].toLowerCase()
+    const arg = (match[2] ?? '').trim()
+    const fileIds = files.length > 0 ? files.map((f) => f.id) : undefined
+    try {
+      if (name === 'me') {
+        if (!arg) {
+          toast.error('Usage: /me <text>')
+          return true
+        }
+        await sendMessage(`*${arg}*`, fileIds, parentId)
+        clearComposer()
+        return true
+      }
+      if (name === 'shrug' || name === 'tableflip' || name === 'unflip') {
+        const emote =
+          name === 'shrug' ? '¯\\_(ツ)_/¯' : name === 'tableflip' ? '(╯°□°)╯︵ ┻━┻' : '┬─┬ ノ( ゜-゜ノ)'
+        await sendMessage(arg ? `${arg} ${emote}` : emote, fileIds, parentId)
+        clearComposer()
+        return true
+      }
+      if (name === 'topic') {
+        if (!arg) {
+          toast.error('Usage: /topic <text>')
+          return true
+        }
+        if (!channelId) return true
+        await updateChannel(channelId, { topic: arg })
+        toast.success('Topic updated')
+        clearComposer()
+        return true
+      }
+      toast.error(`Unknown command: /${name}`)
+      return true
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Command failed')
+      return true
+    }
+  }
+
   const submit = async () => {
     const body = text.trim()
     if (!body && files.length === 0) return
@@ -400,17 +578,12 @@ export function Composer({ parentId, placeholder }: { parentId?: string; placeho
         toast.success('Message updated')
         return
       }
+      if (body.startsWith('/')) {
+        const consumed = await runSlashCommand(body)
+        if (consumed) return
+      }
       await sendMessage(body, files.length > 0 ? files.map((f) => f.id) : undefined, parentId)
-      setText('')
-      setDraft(draftKey, '')
-      setFiles([])
-      requestAnimationFrame(() => {
-        const el = textareaRef.current
-        if (el) {
-          el.style.height = 'auto'
-          el.focus()
-        }
-      })
+      clearComposer()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not send message')
     }
@@ -430,6 +603,11 @@ export function Composer({ parentId, placeholder }: { parentId?: string; placeho
       }
       if (event.key === 'Enter' || event.key === 'Tab') {
         event.preventDefault()
+        if (menu.kind === 'slash') {
+          const entry = slashFiltered[Math.min(menuIndex, slashFiltered.length - 1)]
+          if (entry) selectCommand(entry.command)
+          return
+        }
         if (menu.kind === 'mention') {
           const q = menu.query.toLowerCase()
           const filtered = users.filter(
@@ -455,6 +633,12 @@ export function Composer({ parentId, placeholder }: { parentId?: string; placeho
       }
     }
 
+    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+      // Cmd/Ctrl+Enter always sends
+      event.preventDefault()
+      void submit()
+      return
+    }
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault()
       void submit()
@@ -532,7 +716,8 @@ export function Composer({ parentId, placeholder }: { parentId?: string; placeho
 
       <div
         className={cn(
-          'relative rounded-xl border bg-card shadow-sm transition-colors duration-150 focus-within:border-emerald-500/50',
+          'relative rounded-xl border bg-card shadow-sm transition-all duration-150',
+          'focus-within:border-emerald-500/50 focus-within:shadow-lg focus-within:shadow-emerald-500/10',
           editingMessage ? 'rounded-t-none border-amber-500/40' : 'border-border',
           dragging && 'border-emerald-500 ring-2 ring-emerald-500/30',
         )}
@@ -555,13 +740,21 @@ export function Composer({ parentId, placeholder }: { parentId?: string; placeho
           </div>
         )}
 
-        {/* mention/channel menu */}
+        {/* mention/channel/slash menus */}
         {menu && menu.kind === 'mention' && (
           <MentionMenu
             users={mentionFiltered}
             query={menu.query}
             activeIndex={menuIndex}
             onSelect={selectMention}
+            onClose={() => setMenu(null)}
+          />
+        )}
+        {menu && menu.kind === 'slash' && (
+          <SlashMenu
+            commands={slashFiltered}
+            activeIndex={Math.min(menuIndex, Math.max(0, slashFiltered.length - 1))}
+            onSelect={selectCommand}
             onClose={() => setMenu(null)}
           />
         )}
@@ -636,6 +829,8 @@ export function Composer({ parentId, placeholder }: { parentId?: string; placeho
           aria-label={displayPlaceholder}
           onChange={(event) => handleChange(event.target.value)}
           onKeyDown={handleKeyDown}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           onPaste={(event) => {
             const images = Array.from(event.clipboardData.files).filter((f) => f.type.startsWith('image/'))
             if (images.length > 0) {
@@ -644,7 +839,7 @@ export function Composer({ parentId, placeholder }: { parentId?: string; placeho
               toast.success('Image attached')
             }
           }}
-          className="max-h-40 w-full resize-none bg-transparent px-3.5 pb-1 pt-3 text-[15px] leading-relaxed outline-none placeholder:text-muted-foreground/70"
+          className="max-h-40 w-full resize-none bg-transparent px-3.5 pb-1 pt-3 text-[15px] leading-relaxed outline-none transition-colors duration-200 placeholder:text-muted-foreground/70 focus:placeholder:text-muted-foreground/40"
         />
 
         <div className="flex items-center gap-0.5 px-2 pb-2 pt-1">
@@ -722,6 +917,22 @@ export function Composer({ parentId, placeholder }: { parentId?: string; placeho
 
           <button
             type="button"
+            aria-label="Slash commands"
+            title="Slash commands"
+            className={cn(
+              toolbarButton,
+              menu?.kind === 'slash' && 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+            )}
+            onClick={() => {
+              const el = textareaRef.current
+              el?.focus()
+              if (!text.startsWith('/')) insertAtCaret('/')
+            }}
+          >
+            <Slash className="h-4 w-4" aria-hidden />
+          </button>
+          <button
+            type="button"
             aria-label="Attach file"
             title="Attach file"
             className={toolbarButton}
@@ -771,11 +982,21 @@ export function Composer({ parentId, placeholder }: { parentId?: string; placeho
           </div>
         </div>
       </div>
+      {(focused || menu?.kind === 'slash') && (
+        <p className="mt-1.5 animate-in fade-in slide-in-from-bottom-1 px-1 text-[11px] text-muted-foreground/70 duration-150">
+          <Slash className="mr-1 inline h-3 w-3 align-[-1px] text-emerald-600/80 dark:text-emerald-400/80" aria-hidden />
+          Type <span className="font-mono font-semibold">/</span> for commands —{' '}
+          <span className="font-mono">/me</span>, <span className="font-mono">/shrug</span>,{' '}
+          <span className="font-mono">/tableflip</span>, <span className="font-mono">/unflip</span>,{' '}
+          <span className="font-mono">/topic</span>
+        </p>
+      )}
       <p className="mt-1.5 hidden px-1 text-[11px] text-muted-foreground/70 sm:block">
         <kbd className="rounded border border-border bg-muted px-1 font-mono">Enter</kbd> to send ·{' '}
         <kbd className="rounded border border-border bg-muted px-1 font-mono">Shift+Enter</kbd> new line ·{' '}
         <kbd className="rounded border border-border bg-muted px-1 font-mono">↑</kbd> edit last ·{' '}
-        <kbd className="rounded border border-border bg-muted px-1 font-mono">@</kbd> mention
+        <kbd className="rounded border border-border bg-muted px-1 font-mono">@</kbd> mention ·{' '}
+        <kbd className="rounded border border-border bg-muted px-1 font-mono">/</kbd> commands
       </p>
     </div>
   )

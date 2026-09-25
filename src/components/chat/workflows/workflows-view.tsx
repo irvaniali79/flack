@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import {
+  CalendarClock,
   ChevronLeft,
   History,
   Loader2,
@@ -31,9 +32,33 @@ import { useChatStore } from '@/lib/store'
 import { useViewStore } from '@/lib/view-store'
 import type { WorkflowDTO } from '@/lib/types'
 import { cn } from '@/lib/utils'
-import { humanizeTrigger, triggerIconFor } from './trigger-label'
+import { humanizeTrigger, nextRunLabel, triggerIconFor } from './trigger-label'
 import { WorkflowBuilder } from './workflow-builder'
 import { RunsDrawer } from './runs-drawer'
+
+/** Subtle “next run: in 5 minutes” chip for schedule workflows (refreshes on view focus). */
+function NextRunChip({ workflow }: { workflow: WorkflowDTO }) {
+  // Live-ish: re-render (and thus recompute the relative label) whenever the
+  // window regains focus — cheap and always fresh enough for a demo.
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    const onFocus = () => setTick((t) => t + 1)
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [])
+
+  const label = nextRunLabel(workflow.triggerType, workflow.triggerConfig, workflow.enabled)
+  if (!label) return null
+  return (
+    <p
+      className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground"
+      title={workflow.triggerConfig.nextRunAt ?? undefined}
+    >
+      <CalendarClock className="h-3 w-3 shrink-0" aria-hidden />
+      <span>next run {label}</span>
+    </p>
+  )
+}
 
 export function WorkflowsView() {
   const me = useChatStore((s) => s.me)
@@ -62,6 +87,14 @@ export function WorkflowsView() {
 
   useEffect(() => {
     void load()
+  }, [load])
+
+  // Refresh the list when the tab regains focus — keeps run counts and
+  // schedule "next run" timers fresh after background ticks fire.
+  useEffect(() => {
+    const onFocus = () => void load()
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
   }, [load])
 
   const toggleEnabled = async (workflow: WorkflowDTO) => {
@@ -236,6 +269,8 @@ export function WorkflowsView() {
                       {humanizeTrigger(workflow.triggerType, workflow.triggerConfig, channels)}
                     </span>
                   </p>
+
+                  <NextRunChip workflow={workflow} />
 
                   <div className="mt-auto flex items-center justify-between gap-2 border-t border-border pt-3">
                     <div className="flex items-center gap-2">

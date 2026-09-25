@@ -4,11 +4,13 @@ import { useTheme } from 'next-themes'
 import {
   Bell,
   BellOff,
+  Bookmark,
   Bot,
   CheckCheck,
   ChevronDown,
   Compass,
   Hash,
+  Keyboard,
   Lock,
   LogOut,
   Moon,
@@ -32,6 +34,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useChatStore } from '@/lib/store'
+import { useViewStore } from '@/lib/view-store'
 import type { ChannelDTO } from '@/lib/types'
 import { UserAvatar } from './avatar'
 import { PresenceDot } from './presence-dot'
@@ -164,13 +167,21 @@ function ChannelRow({ channel }: { channel: ChannelDTO }) {
       id={`sidebar-item-${channel.id}`}
       onClick={() => void openChannel(channel.id)}
       className={cn(
-        'group flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors duration-150',
+        'group relative flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-all duration-150 hover:translate-x-0.5',
         active
           ? 'bg-emerald-600/15 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
           : 'text-foreground/75 hover:bg-accent hover:text-foreground',
         channel.unread > 0 && !active && 'font-semibold text-foreground',
       )}
     >
+      {/* active left bar */}
+      <span
+        className={cn(
+          'absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-emerald-500 transition-opacity duration-150',
+          active ? 'opacity-100' : 'opacity-0',
+        )}
+        aria-hidden
+      />
       {isDm ? (
         other ? (
           <span className="relative shrink-0">
@@ -205,13 +216,17 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const users = useChatStore((s) => s.users)
   const agents = useChatStore((s) => s.agents)
   const activeChannelId = useChatStore((s) => s.activeChannelId)
+  const savedCount = useChatStore((s) => s.savedMessageIds.length)
   const setSearchOpen = useChatStore((s) => s.setSearchOpen)
   const setCreateChannelOpen = useChatStore((s) => s.setCreateChannelOpen)
   const setBrowseChannelsOpen = useChatStore((s) => s.setBrowseChannelsOpen)
   const setNewDmOpen = useChatStore((s) => s.setNewDmOpen)
   const setProfileUserId = useChatStore((s) => s.setProfileUserId)
+  const setShortcutsOpen = useChatStore((s) => s.setShortcutsOpen)
   const logout = useChatStore((s) => s.logout)
   const openChannel = useChatStore((s) => s.openChannel)
+  const view = useViewStore((s) => s.view)
+  const setView = useViewStore((s) => s.setView)
   const { resolvedTheme, setTheme } = useTheme()
 
   const [channelsOpen, setChannelsOpen] = useState(true)
@@ -283,6 +298,15 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        <button
+          type="button"
+          aria-label="Keyboard shortcuts"
+          title="Keyboard shortcuts (?)"
+          onClick={() => setShortcutsOpen(true)}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground"
+        >
+          <Keyboard className="h-[18px] w-[18px]" aria-hidden />
+        </button>
         <NotificationBell />
       </div>
 
@@ -301,6 +325,36 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         </button>
       </div>
 
+      {/* saved items quick row */}
+      <div className="px-3 pb-2">
+        <button
+          type="button"
+          onClick={() => {
+            setView('saved')
+            // close the mobile drawer without routing back to chat
+            useChatStore.getState().setDrawerOpen(false)
+          }}
+          aria-label={`Saved items${savedCount > 0 ? ` — ${savedCount} saved` : ''}`}
+          className={cn(
+            'flex w-full items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm transition-all duration-150',
+            view === 'saved'
+              ? 'border-emerald-500/40 bg-emerald-600/15 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
+              : 'border-transparent bg-zinc-200/70 text-foreground/80 hover:border-border hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-800/80',
+          )}
+        >
+          <Bookmark
+            className={cn('h-3.5 w-3.5 shrink-0', view === 'saved' && 'fill-current')}
+            aria-hidden
+          />
+          <span className="flex-1 text-left font-medium">Saved items</span>
+          {savedCount > 0 && (
+            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-600/15 px-1.5 text-[11px] font-bold text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300">
+              {savedCount > 99 ? '99+' : savedCount}
+            </span>
+          )}
+        </button>
+      </div>
+
       {/* channel list */}
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
         {/* channels section */}
@@ -313,7 +367,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               className="flex flex-1 items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground transition-colors duration-150 hover:text-foreground"
             >
               <ChevronDown
-                className={cn('h-3 w-3 transition-transform duration-150', !channelsOpen && '-rotate-90')}
+                className={cn('h-3 w-3 transition-transform duration-200 ease-out', !channelsOpen && '-rotate-90')}
                 aria-hidden
               />
               Channels
@@ -356,7 +410,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               className="flex flex-1 items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground transition-colors duration-150 hover:text-foreground"
             >
               <ChevronDown
-                className={cn('h-3 w-3 transition-transform duration-150', !agentsOpen && '-rotate-90')}
+                className={cn('h-3 w-3 transition-transform duration-200 ease-out', !agentsOpen && '-rotate-90')}
                 aria-hidden
               />
               Agents
@@ -401,7 +455,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               className="flex flex-1 items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground transition-colors duration-150 hover:text-foreground"
             >
               <ChevronDown
-                className={cn('h-3 w-3 transition-transform duration-150', !dmsOpen && '-rotate-90')}
+                className={cn('h-3 w-3 transition-transform duration-200 ease-out', !dmsOpen && '-rotate-90')}
                 aria-hidden
               />
               Direct messages

@@ -2,8 +2,9 @@
 // every new message. All work is defensive: runtime errors are caught and
 // logged, never thrown (the caller does not await this in a user-facing path).
 import { db } from '@/lib/db'
-import { emitAgentTyping, emitToChannel } from '@/lib/realtime-server'
-import { serializeMessage, type MessageFull } from '@/lib/serialize'
+import { emitAgentTyping, emitToChannel, emitToUsers } from '@/lib/realtime-server'
+import { serializeMessage, serializeNotification, type MessageFull } from '@/lib/serialize'
+import { parseMentions } from '@/lib/mentions'
 import { callLLM, type LLMMessage } from './llm'
 import type { Agent, Channel, User } from '@prisma/client'
 
@@ -68,6 +69,73 @@ async function postAsAgent(
     void emitToChannel(channelId, 'message:new', { message: serializeMessage(created as MessageFull) })
   } catch (err) {
     console.error('[agents] failed to post agent message:', err)
+  }
+}
+
+/** The LLM sometimes prefixes its reply with the agent's own name or handle
+ *  (an artifact of the "Name: body" transcript format). Strip it. */
+function stripSelfPrefix(reply: string, agentName: string, handle: string): string {
+  let out = reply.trim()
+  const prefixes = [agentName, `@${handle}`]
+    .map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('|')
+  out = out.replace(new RegExp(`^(?:${prefixes})\s*[:\uff1a]\s*`, 'i'), '')
+  // Some models also prefix with a stray "assistant:" or "reply:
+  out = out.replace(/^(?:assistant|ai|bot|reply)\s*[:\uff1a]\s*/i, '')
+  return out.trim()
+}
+
+/** Humans mentioned in an agent reply get a notification, exactly like a
+ *  human-authored mention. Best-effort — failures are logged, never thrown. */
+async function notifyMentionedHumans(
+  created: MessageFull,
+  channel: Channel,
+  agentUser: User,
+): Promise<void> {
+  try {
+    const members = await db.channelMember.findMany({
+      where: { channelId: channel.id, user: { kind: 'human', isActive: true } },
+      include: { user: { select: { id: true, name: true } } },
+    })
+    const { userIds, specials } = parseMentions(
+      created.body,
+      members.map((m) => ({ id: m.user.id, name: m.user.name })),
+    )
+    const targetIds = [...new Set(userIds)].filter((id) => id !== agentUser.id)
+    // @channel / @here in an agent reply notify all human members
+    if (specials.length > 0) targetIds.push(...members.map((m) => m.user.id).filter((id) => id !== agentUser.id))
+    if (targetIds.length === 0) return
+
+    const isSpecial = specials.length > 0
+    const channelLabel = channel.kind === 'dm' ? 'a DM' : `#${channel.name}`
+    const text = `${agentUser.name} ${isSpecial ? 'mentioned the channel' : 'mentioned you'} in ${channelLabel}`
+    await db.notification.createMany({
+      data: targetIds.map((userId) => ({
+        userId,
+        type: isSpecial ? 'mention_special' : 'mention',
+        channelId: channel.id,
+        messageId: created.id,
+        actorId: agentUser.id,
+        body: text,
+      })),
+    })
+    const rows = await db.notification.findMany({
+      where: { messageId: created.id, userId: { in: targetIds } },
+      orderBy: { createdAt: 'asc' },
+    })
+    const byUser = new Map<string, typeof rows>()
+    for (const n of rows) byUser.set(n.userId, [...(byUser.get(n.userId) ?? []), n])
+    for (const [userId, list] of byUser) {
+      const latest = list[list.length - 1]
+      const dto = serializeNotification({
+        ...latest,
+        channel: { name: channel.name },
+        actor: { name: agentUser.name },
+      })
+      void emitToUsers([userId], 'notification:new', dto).catch(() => {})
+    }
+  } catch (err) {
+    console.error('[agents] mention notification failed:', err)
   }
 }
 
@@ -145,7 +213,7 @@ async function invokeAgent(
       })
     }
 
-    const reply = await callLLM(llmMessages)
+    const reply = stripSelfPrefix(await callLLM(llmMessages), agentName, agent.handle)
 
     const created = await db.message.create({
       data: {
@@ -156,8 +224,11 @@ async function invokeAgent(
       },
       include: messageInclude,
     })
-    void emitToChannel(channel.id, 'message:new', { message: serializeMessage(created as MessageFull) })
+    const createdFull = created as MessageFull
+    void emitToChannel(channel.id, 'message:new', { message: serializeMessage(createdFull) })
     await db.agent.update({ where: { id: agent.id }, data: { invocations: { increment: 1 } } })
+    // Humans @-mentioned in the agent's reply get notified like any mention
+    void notifyMentionedHumans(createdFull, channel, agent.user)
   } catch (err) {
     console.error(`[agents] LLM generation failed for @${agent.handle}:`, err)
     await postAsAgent(
