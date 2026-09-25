@@ -1,0 +1,236 @@
+// Acme Chat MCP server — Model Context Protocol over HTTP (Streamable HTTP
+// transport, POST-only JSON-RPC 2.0). This is the platform's key
+// differentiator: external AI clients (Claude Desktop, Cursor, custom agents)
+// get first-class access to the same API humans use in the app.
+//
+// Auth:  `Authorization: Bearer acme_…` API key (create one in the app under
+//        Integrations). Session-cookie auth also works — that is what the
+//        in-app tool playground uses.
+//
+// Methods: initialize · notifications/initialized · ping · tools/list ·
+//          tools/call · resources/list · prompts/list
+import { db } from '@/lib/db'
+import { getSessionUser } from '@/lib/auth'
+import { requireApiKeyUser } from '@/lib/api-keys'
+import { writeAudit } from '@/lib/audit'
+import {
+  MCP_TOOLS,
+  ToolError,
+  toolListChannels,
+  toolPostMessage,
+  toolReadChannel,
+  toolSearchMessages,
+} from '@/lib/mcp/tools'
+
+const PROTOCOL_VERSION = '2025-03-26'
+const SERVER_INFO = { name: 'acme-chat', version: '1.0.0' }
+
+type JsonRpcId = string | number | null
+
+type JsonRpcRequest = {
+  jsonrpc?: string
+  id?: JsonRpcId
+  method?: string
+  params?: Record<string, unknown>
+}
+
+function ok(id: JsonRpcId, result: unknown): Response {
+  return Response.json({ jsonrpc: '2.0', id, result })
+}
+
+function err(id: JsonRpcId, code: number, message: string): Response {
+  return Response.json({ jsonrpc: '2.0', id, error: { code, message } })
+}
+
+// ─── Actor resolution: Bearer key → user, else session cookie (playground) ──
+
+async function resolveActor(request: Request): Promise<
+  | { ok: true; user: { id: string; orgId: string; name: string }; via: 'api_key' | 'session' }
+  | { ok: false; response: Response }
+> {
+  const authHeader = request.headers.get('authorization')
+  if (authHeader) {
+    try {
+      const keyUser = await requireApiKeyUser(request)
+      const user = await db.user.findUnique({ where: { id: keyUser.userId } })
+      if (!user) return { ok: false, response: err(null, -32001, 'API key owner no longer exists') }
+      return { ok: true, user: { id: user.id, orgId: user.orgId, name: user.name }, via: 'api_key' }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Invalid API key'
+      return { ok: false, response: err(null, -32001, message) }
+    }
+  }
+  const sessionUser = await getSessionUser()
+  if (!sessionUser) {
+    return {
+      ok: false,
+      response: err(null, -32001, 'Authenticate with an API key (Authorization: Bearer acme_…) or a session cookie'),
+    }
+  }
+  return { ok: true, user: { id: sessionUser.id, orgId: sessionUser.orgId, name: sessionUser.name }, via: 'session' }
+}
+
+// ─── Tool dispatch ───────────────────────────────────────────────────────────
+
+const TOOL_IMPLS: Record<
+  string,
+  (actor: { id: string; orgId: string; name: string }, args: Record<string, unknown>) => Promise<unknown>
+> = {
+  post_message: (a, args) =>
+    toolPostMessage(a, {
+      channel: String(args.channel ?? ''),
+      text: String(args.text ?? ''),
+      thread_ts: args.thread_ts ? String(args.thread_ts) : undefined,
+    }),
+  read_channel: (a, args) =>
+    toolReadChannel(a, {
+      channel: String(args.channel ?? ''),
+      limit: args.limit === undefined ? undefined : Number(args.limit),
+      thread_ts: args.thread_ts ? String(args.thread_ts) : undefined,
+    }),
+  search_messages: (a, args) =>
+    toolSearchMessages(a, {
+      query: String(args.query ?? ''),
+      count: args.count === undefined ? undefined : Number(args.count),
+    }),
+  list_channels: (a) => toolListChannels(a),
+}
+
+function textContent(text: string) {
+  return { content: [{ type: 'text', text }], isError: false }
+}
+
+function toolErrorContent(message: string) {
+  return { content: [{ type: 'text', text: message }], isError: true }
+}
+
+// ─── POST: the MCP endpoint ──────────────────────────────────────────────────
+
+export async function POST(request: Request) {
+  let body: JsonRpcRequest | JsonRpcRequest[] | null = null
+  try {
+    body = (await request.json()) as JsonRpcRequest | JsonRpcRequest[]
+  } catch {
+    return err(null, -32700, 'Parse error: body must be valid JSON (JSON-RPC 2.0)')
+  }
+
+  const messages = Array.isArray(body) ? body : [body]
+  const responses: Response[] = []
+
+  for (const msg of messages) {
+    responses.push(await handleMessage(request, msg))
+  }
+
+  // Notifications (no id) return 202 with no body; batches return an array
+  const withId = responses.filter((r) => r.status !== 202)
+  if (Array.isArray(body)) {
+    if (withId.length === 0) return new Response(null, { status: 202 })
+    const payloads = await Promise.all(withId.map((r) => r.json()))
+    return Response.json(payloads)
+  }
+  return responses[0] ?? new Response(null, { status: 202 })
+}
+
+async function handleMessage(request: Request, msg: JsonRpcRequest): Promise<Response> {
+  // Shape check — requests must carry jsonrpc "2.0" and a method
+  if (typeof msg !== 'object' || msg === null || typeof msg.method !== 'string') {
+    return err(null, -32600, 'Invalid Request: expected {jsonrpc:"2.0", method, params?, id?}')
+  }
+  if (msg.jsonrpc !== undefined && msg.jsonrpc !== '2.0') {
+    return err(msg.id ?? null, -32600, `Invalid Request: jsonrpc must be "2.0"`)
+  }
+
+  const isNotification = msg.id === undefined
+  const id = msg.id ?? null
+
+  // initialize works pre-auth-free? No — MCP requires auth on every call for us.
+  const actor = await resolveActor(request)
+  if (!actor.ok) return err(id, -32001, 'Unauthorized')
+
+  switch (msg.method) {
+    case 'initialize':
+      return ok(id, {
+        protocolVersion: PROTOCOL_VERSION,
+        capabilities: {
+          tools: { listChanged: false },
+          resources: {},
+          prompts: {},
+        },
+        serverInfo: SERVER_INFO,
+        instructions:
+          'Acme Chat MCP server. Tools: post_message, read_channel, search_messages, list_channels. ' +
+          'All actions run as ' + actor.user.name + '.',
+      })
+
+    case 'notifications/initialized':
+    case 'notifications/cancelled':
+      return new Response(null, { status: 202 })
+
+    case 'ping':
+      return ok(id, {})
+
+    case 'tools/list':
+      return ok(id, { tools: MCP_TOOLS })
+
+    case 'resources/list':
+      return ok(id, { resources: [] })
+
+    case 'prompts/list':
+      return ok(id, { prompts: [] })
+
+    case 'tools/call': {
+      const name = msg.params?.name
+      const args = (msg.params?.arguments ?? {}) as Record<string, unknown>
+      if (typeof name !== 'string') return err(id, -32602, 'Invalid params: missing tool name')
+
+      const impl = TOOL_IMPLS[name]
+      if (!impl) {
+        return ok(id, toolErrorContent(`Unknown tool "${name}". Available: ${MCP_TOOLS.map((t) => t.name).join(', ')}`))
+      }
+
+      // Audit every tool call (API-key calls especially — these are external)
+      void writeAudit({
+        orgId: actor.user.orgId,
+        actorId: actor.user.id,
+        action: 'mcp.tool_call',
+        target: name,
+        meta: {
+          via: actor.via,
+          args: JSON.stringify(args).slice(0, 500),
+        },
+      })
+
+      try {
+        const result = await impl(actor.user, args)
+        return ok(id, textContent(JSON.stringify(result, null, 2)))
+      } catch (e) {
+        if (e instanceof ToolError) return ok(id, toolErrorContent(e.message))
+        console.error('[mcp] tool error:', e)
+        return ok(id, toolErrorContent(`Tool "${name}" failed with an internal error`))
+      }
+    }
+
+    default:
+      if (isNotification) return new Response(null, { status: 202 })
+      return err(id, -32601, `Method not found: ${msg.method}`)
+  }
+}
+
+// ─── GET: unsupported (no SSE stream in this deployment) ─────────────────────
+
+export async function GET() {
+  return Response.json(
+    {
+      name: SERVER_INFO.name,
+      version: SERVER_INFO.version,
+      protocolVersion: PROTOCOL_VERSION,
+      transport: 'http-jsonrpc',
+      methods: ['initialize', 'notifications/initialized', 'ping', 'tools/list', 'tools/call', 'resources/list', 'prompts/list'],
+      auth: 'Authorization: Bearer acme_… (API key) — manage keys in the app: Integrations view',
+      note: 'Send JSON-RPC 2.0 requests via POST. SSE streaming is not enabled.',
+    },
+    { status: 405, headers: { Allow: 'POST' } },
+  )
+}
+
+export const dynamic = 'force-dynamic'

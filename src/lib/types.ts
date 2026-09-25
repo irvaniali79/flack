@@ -180,3 +180,21 @@ export interface WorkflowRunDTO {
   startedAt: string
   finishedAt: string | null
 }
+
+// ─── API keys & MCP ──────────────────────────────────────────────────────────
+
+export interface ApiKeyDTO {
+  id: string
+  name: string
+  keyPrefix: string
+  scopes: string[]
+  lastUsedAt: string | null
+  revokedAt: string | null
+  createdAt: string
+}
+
+export interface McpToolInfo {
+  name: string
+  description: string
+  inputSchema: Record<string, unknown>
+}

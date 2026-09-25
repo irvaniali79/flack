@@ -22,6 +22,7 @@ model Org {
   agents    Agent[]
   workflows Workflow[]
   auditLogs AuditLog[]
+  apiKeys   ApiKey[]
 }
 
 // ─── Users & Auth ────────────────────────────────────────────────────────────
@@ -55,6 +56,7 @@ model User {
   reactions    Reaction[]
   files        File[]
   notifications Notification[]
+  apiKeys      ApiKey[]
 }
 
 model Session {
@@ -64,6 +66,26 @@ model Session {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
   createdAt DateTime @default(now())
+}
+
+// ─── API keys (MCP + programmatic access) ────────────────────────────────────
+
+model ApiKey {
+  id        String    @id @default(cuid())
+  orgId     String
+  org       Org       @relation(fields: [orgId], references: [id])
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  // SHA-256 hex digest of the full key — the full key is shown exactly once
+  keyHash   String    @unique
+  // First 12 chars of the key, for display + lookup ("acme_ab12cd34ef56")
+  keyPrefix String
+  // Comma-separated scope list; currently "mcp"
+  scopes    String    @default("mcp")
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
 }
 
 // ─── Channels & Membership ───────────────────────────────────────────────────

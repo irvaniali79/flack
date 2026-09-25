@@ -25,6 +25,7 @@ import { ShortcutsDialog } from './shortcuts-dialog'
 import { SavedView } from './saved-view'
 import { WorkflowsView } from './workflows/workflows-view'
 import { AdminView } from './admin/admin-view'
+import { IntegrationsView } from './integrations/integrations-view'
 
 function Splash() {
   return (
@@ -185,6 +186,8 @@ export function ChatApp() {
           <AdminView />
         ) : view === 'saved' ? (
           <SavedView />
+        ) : view === 'integrations' ? (
+          <IntegrationsView />
         ) : (
           <>
             <ChannelHeader />

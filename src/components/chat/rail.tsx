@@ -5,6 +5,7 @@ import {
   LogOut,
   MessageSquare,
   Moon,
+  Plug,
   Settings,
   Shield,
   Sparkles,
@@ -133,6 +134,22 @@ export function Rail() {
             </button>
           </TooltipTrigger>
           <TooltipContent side="right">Workflows</TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              aria-label="Integrations"
+              aria-pressed={view === 'integrations'}
+              onClick={() => setView('integrations')}
+              className={cn(buttonClass(view === 'integrations'), 'group')}
+            >
+              <Plug className="h-5 w-5" aria-hidden />
+              <span className={accentClass(view === 'integrations')} aria-hidden />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right">Integrations — MCP server & API keys</TooltipContent>
         </Tooltip>
 
         {isAdmin && (
