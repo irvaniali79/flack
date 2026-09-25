@@ -35,10 +35,14 @@ export function EmojiPicker({
       const builtins = searchEmojis(query).map(
         (e): PickerEmoji => ({ kind: 'builtin', char: e.char, title: `:${e.keywords[0]}:` }),
       )
-      // custom emoji match on shortcode prefix
+      // custom emoji match on shortcode or alias prefix
       const customs = customEmoji
-        .filter((e) => e.name.includes(q))
-        .map((e): PickerEmoji => ({ kind: 'custom', entry: e, title: `:${e.name}:` }))
+        .filter((e) => e.name.includes(q) || e.aliases.some((a) => a.includes(q)))
+        .map((e): PickerEmoji => ({
+          kind: 'custom',
+          entry: e,
+          title: e.aliases.length > 0 ? `:${e.name}: (= :${e.aliases.join(':, :')}:)` : `:${e.name}:`,
+        }))
       return { id: 'search', name: `Results for “${query.trim()}”`, emojis: [...customs, ...builtins] }
     }
     if (category === 'recent') {

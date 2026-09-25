@@ -7,6 +7,8 @@ import { create } from 'zustand'
 export interface CustomEmojiDTO {
   id: string
   name: string
+  /** Alias shortcodes that render this emoji too (e.g. :shipit: for :ship_it:) */
+  aliases: string[]
   url: string
   mimeType: string
   size: number
@@ -35,12 +37,13 @@ export const useCustomEmojiStore = create<CustomEmojiStore>((set, get) => ({
         const res = await fetch('/api/emoji')
         if (!res.ok) return
         const data = (await res.json()) as { emoji?: CustomEmojiDTO[] }
-        const emoji = data.emoji ?? []
-        set({
-          emoji,
-          byName: new Map(emoji.map((e) => [e.name, e])),
-          loaded: true,
-        })
+        const emoji = (data.emoji ?? []).map((e) => ({ ...e, aliases: e.aliases ?? [] }))
+        const byName = new Map<string, CustomEmojiDTO>()
+        for (const e of emoji) {
+          byName.set(e.name, e)
+          for (const alias of e.aliases) byName.set(alias, e)
+        }
+        set({ emoji, byName, loaded: true })
       } catch {
         // non-critical — messages still render, just without custom emoji
       } finally {

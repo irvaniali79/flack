@@ -1,14 +1,17 @@
 'use client'
 // Integrations view — the developer surface for the platform's key
 // differentiators: a Model Context Protocol server and a Slack-compatible
-// Web API. Five sections:
+// Web API. Sections:
 //   1. MCP endpoint overview + connection snippets (curl / Claude / Cursor)
 //   2. Slack bot API compatibility (zero-code bot migration)
 //   3. API key management (Bearer auth for external clients)
 //   4. Tool playground (call tools live, exactly as an AI client would)
 //   5. Resources (channels as readable MCP resources)
+//   6. Prompts (instruction templates)
+//   7. Sampling (server-side LLM completions)
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import {
+  Bot,
   Cable,
   ChevronDown,
   ChevronLeft,
@@ -409,6 +412,112 @@ function PromptsSection({ origin }: { origin: string }) {
   )
 }
 
+function SamplingSection({ origin }: { origin: string }) {
+  const [reply, setReply] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Live dogfood: a tiny fixed completion via the session cookie — proves the
+  // platform LLM answers through the MCP endpoint.
+  const tryIt = useCallback(async () => {
+    if (busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/mcp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 12,
+          method: 'sampling/createMessage',
+          params: {
+            systemPrompt: 'You are the Acme Chat sampling endpoint. Reply with exactly one short, witty sentence.',
+            messages: [
+              { role: 'user', content: { type: 'text', text: 'Write a one-line haiku about shipping code on a Friday.' } },
+            ],
+          },
+        }),
+      })
+      const data = (await res.json()) as {
+        result?: { content?: { text?: string } }
+        error?: { message: string }
+      }
+      if (data.result?.content?.text) setReply(data.result.content.text)
+      else setError(data.error?.message ?? 'Sampling failed')
+    } catch {
+      setError('Could not reach the MCP server')
+    } finally {
+      setBusy(false)
+    }
+  }, [busy])
+
+  const samplingSnippet = `curl -X POST ${origin}/api/mcp \\
+  -H "Authorization: Bearer acme_YOUR_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"jsonrpc":"2.0","id":1,"method":"sampling/createMessage",
+       "params":{
+         "systemPrompt":"Summarize tersely for a busy engineer.",
+         "messages":[
+           {"role":"user","content":{"type":"text","text":"<paste channel transcript here>"}}
+         ]}}'`
+
+  return (
+    <section aria-labelledby="sampling-heading" className="space-y-3">
+      <div className="flex items-center gap-2.5">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-600/15 text-amber-600 dark:text-amber-400">
+          <Bot className="h-4 w-4" aria-hidden />
+        </span>
+        <div className="min-w-0">
+          <h2 id="sampling-heading" className="text-sm font-bold">
+            Sampling — server-side LLM
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            <code className="rounded bg-muted px-1 font-mono text-[10px]">sampling/createMessage</code> runs a
+            completion on the platform&apos;s LLM — the same adapter that powers Aria and CodeReviewer. Clients
+            summarize transcripts or draft text without shipping their own model.
+          </p>
+        </div>
+        <Badge variant="outline" className="ml-auto h-5 shrink-0 px-1.5 text-[10px]">
+          MCP spec
+        </Badge>
+      </div>
+
+      <div className="space-y-3 rounded-xl border border-border bg-gradient-to-br from-amber-500/5 via-card to-card p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            className="h-8 rounded-lg bg-amber-600 hover:bg-amber-700"
+            onClick={() => void tryIt()}
+            disabled={busy}
+          >
+            {busy ? <Loader2 className="mr-1.5 h-3 w-3 animate-spin" aria-hidden /> : <Sparkles className="mr-1.5 h-3 w-3" aria-hidden />}
+            {busy ? 'Thinking…' : 'Try it live'}
+          </Button>
+          <span className="text-[11px] text-muted-foreground">
+            A one-line completion, straight from the MCP endpoint (runs as you).
+          </span>
+        </div>
+        {error && (
+          <p className="rounded-lg border border-rose-500/30 bg-rose-500/5 px-3 py-2 text-xs text-rose-600 dark:text-rose-400">
+            {error}
+          </p>
+        )}
+        {reply && (
+          <div className="rounded-lg border border-amber-500/30 bg-background px-3 py-2.5">
+            <p className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+              <Bot className="h-3 w-3" aria-hidden />
+              acme-platform-llm
+            </p>
+            <p className="text-sm leading-relaxed">{reply}</p>
+          </div>
+        )}
+        <CodeBlock code={samplingSnippet} language="bash" highlight />
+      </div>
+    </section>
+  )
+}
+
 export function IntegrationsView() {
   const setView = useViewStore((s) => s.setView)
   // The browsing origin is a client-only constant — read it via
@@ -541,6 +650,7 @@ export function IntegrationsView() {
                 <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-medium">resources/templates/list</Badge>
                 <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-medium">prompts/list</Badge>
                 <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-medium">prompts/get</Badge>
+                <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-medium">sampling/createMessage</Badge>
                 <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-medium">ping</Badge>
                 <Badge variant="outline" className="h-5 px-1.5 text-[10px]">Bearer auth</Badge>
               </div>
@@ -606,7 +716,10 @@ export function IntegrationsView() {
           {/* 6 ─ prompts */}
           <PromptsSection origin={origin} />
 
-          {/* 7 ─ tool reference */}
+          {/* 7 ─ sampling */}
+          <SamplingSection origin={origin} />
+
+          {/* 8 ─ tool reference */}
           {tools && <ToolReference tools={tools} />}
         </div>
       </div>

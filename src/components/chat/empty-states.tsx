@@ -21,14 +21,14 @@ export function NoChannelSelected() {
       </div>
       <div className="relative">
         <h2 className="text-xl font-bold tracking-tight">Welcome to Acme Chat</h2>
-        <p className="mt-1 max-w-xs text-sm leading-relaxed text-foreground/75 dark:text-zinc-400">
+        <p className="mt-1.5 max-w-xs text-sm leading-relaxed text-foreground/75 dark:text-zinc-400">
           Pick a channel or conversation on the left to get started.
         </p>
       </div>
       {general && (
         <Button
           variant="outline"
-          className="group relative rounded-full border-border bg-background/80 px-5 font-semibold shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:border-emerald-500/50 hover:bg-emerald-500/5 hover:text-emerald-700 dark:hover:text-emerald-300"
+          className="group relative mt-2 rounded-full border-border bg-background/80 px-5 font-semibold shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:border-emerald-500/50 hover:bg-emerald-500/5 hover:text-emerald-700 dark:hover:text-emerald-300"
           onClick={() => void openChannel(general.id)}
         >
           Jump to #{general.slug === 'general' ? 'general' : general.name}

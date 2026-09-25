@@ -66,6 +66,7 @@ import type { UserDTO } from '@/lib/types'
 import { SlackImportSection } from './slack-import-section'
 import { CutoverSection } from './cutover-section'
 import { CustomEmojiSection } from './custom-emoji-section'
+import { AdminSessionsSection } from './sessions-section'
 import { UserAvatar } from '../avatar'
 import { cn } from '@/lib/utils'
 
@@ -407,6 +408,7 @@ export function AdminView() {
               <TabsList className="rounded-xl">
                 <TabsTrigger value="members" className="rounded-lg">Members</TabsTrigger>
                 <TabsTrigger value="channels" className="rounded-lg">Channels</TabsTrigger>
+                <TabsTrigger value="sessions" className="rounded-lg">Sessions</TabsTrigger>
                 <TabsTrigger value="import" className="rounded-lg">Import</TabsTrigger>
                 <TabsTrigger value="cutover" className="rounded-lg">Cutover</TabsTrigger>
                 <TabsTrigger value="emoji" className="rounded-lg">Emoji</TabsTrigger>
@@ -624,6 +626,10 @@ export function AdminView() {
               </TabsContent>
 
               {/* Slack import */}
+              <TabsContent value="sessions" className="mt-4">
+                <AdminSessionsSection />
+              </TabsContent>
+
               <TabsContent value="import" className="mt-4">
                 <SlackImportSection />
               </TabsContent>

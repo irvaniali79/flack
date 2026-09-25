@@ -9,11 +9,13 @@
 //
 // Methods: initialize · notifications/initialized · ping · tools/list ·
 //          tools/call · resources/list · resources/read ·
-//          resources/templates/list · prompts/list · prompts/get
+//          resources/templates/list · prompts/list · prompts/get ·
+//          sampling/createMessage (server-side LLM via the agents adapter)
 import { db } from '@/lib/db'
 import { getSessionUser } from '@/lib/auth'
 import { requireApiKeyUser, TOOL_SCOPE_REQUIREMENTS } from '@/lib/api-keys'
 import { writeAudit } from '@/lib/audit'
+import { callLLM } from '@/lib/agents/llm'
 import {
   MCP_TOOLS,
   ToolError,
@@ -244,6 +246,7 @@ async function handleMessage(request: Request, msg: JsonRpcRequest): Promise<Res
           tools: { listChanged: false },
           resources: {},
           prompts: {},
+          sampling: {},
         },
         serverInfo: SERVER_INFO,
         instructions:
@@ -252,6 +255,7 @@ async function handleMessage(request: Request, msg: JsonRpcRequest): Promise<Res
           '(recent messages — list with resources/list, read with resources/read) and the ' +
           'parameterized template acme://channels/{slug}/messages?limit=N (see resources/templates/list). ' +
           'Prompts: catch_up, thread_review, standup (reusable instruction templates — list with prompts/list, render with prompts/get). ' +
+          'Sampling: sampling/createMessage runs a server-side LLM completion — summarize or draft without shipping your own model. ' +
           'All actions run as ' +
           actor.user.name + '.',
       })
@@ -420,6 +424,58 @@ async function handleMessage(request: Request, msg: JsonRpcRequest): Promise<Res
       })
     }
 
+    case 'sampling/createMessage': {
+      // MCP spec shape: { messages: [{role, content:{type:'text',text}}],
+      //                    systemPrompt?, maxTokens?, temperature? }
+      // We run the platform's server-side LLM (the same adapter the AI agents
+      // use) and return the completion in MCP's SamplingMessage format.
+      const params = (msg.params ?? {}) as {
+        messages?: Array<{ role?: string; content?: { type?: string; text?: string } }>
+        systemPrompt?: unknown
+        maxTokens?: unknown
+        temperature?: unknown
+      }
+      if (!Array.isArray(params.messages) || params.messages.length === 0) {
+        return err(id, -32602, 'Invalid params: sampling requires a non-empty "messages" array')
+      }
+      const llmMessages: Array<{ role: 'system' | 'assistant' | 'user'; content: string }> = []
+      if (typeof params.systemPrompt === 'string' && params.systemPrompt.trim()) {
+        llmMessages.push({ role: 'system', content: params.systemPrompt.trim() })
+      }
+      for (const [i, m] of params.messages.entries()) {
+        if (m?.role !== 'user' && m?.role !== 'assistant') {
+          return err(id, -32602, `Invalid params: messages[${i}].role must be "user" or "assistant"`)
+        }
+        if (m?.content?.type !== 'text' || typeof m.content.text !== 'string' || !m.content.text.trim()) {
+          return err(id, -32602, `Invalid params: messages[${i}].content must be {type:"text", text}`)
+        }
+        llmMessages.push({ role: m.role, content: m.content.text })
+      }
+      // maxTokens/temperature accepted for spec compliance; the shared
+      // adapter doesn't expose token caps — documented simplification.
+
+      void writeAudit({
+        orgId: actor.user.orgId,
+        actorId: actor.user.id,
+        action: 'mcp.sampling',
+        target: 'sampling/createMessage',
+        meta: { via: actor.via, turns: llmMessages.length },
+      }).catch(() => {})
+
+      try {
+        const reply = await callLLM(llmMessages)
+        return ok(id, {
+          role: 'assistant' as const,
+          content: { type: 'text' as const, text: reply },
+          model: 'acme-platform-llm',
+          stopReason: 'end_turn' as const,
+        })
+      } catch (e) {
+        console.error('[mcp] sampling failed:', e)
+        return err(id, -32603, 'Sampling failed — the platform LLM is unavailable right now. Try again shortly.')
+      }
+    }
+
     case 'tools/call': {
       const name = msg.params?.name
       const args = (msg.params?.arguments ?? {}) as Record<string, unknown>
@@ -479,7 +535,7 @@ export async function GET() {
       version: SERVER_INFO.version,
       protocolVersion: PROTOCOL_VERSION,
       transport: 'http-jsonrpc',
-      methods: ['initialize', 'notifications/initialized', 'ping', 'tools/list', 'tools/call', 'resources/list', 'resources/read', 'resources/templates/list', 'prompts/list', 'prompts/get'],
+      methods: ['initialize', 'notifications/initialized', 'ping', 'tools/list', 'tools/call', 'resources/list', 'resources/read', 'resources/templates/list', 'prompts/list', 'prompts/get', 'sampling/createMessage'],
       auth: 'Authorization: Bearer acme_… (API key) — manage keys in the app: Integrations view',
       note: 'Send JSON-RPC 2.0 requests via POST. SSE streaming is not enabled.',
     },

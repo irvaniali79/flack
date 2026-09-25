@@ -1,19 +1,21 @@
 'use client'
 // Custom emoji management (admin) — upload workspace emoji, see them live in
 // the picker + messages + reactions. Uses :shortcode: everywhere, exactly
-// like Slack.
+// like Slack. Aliases: extra shortcodes that render the same image
+// (:shipit: for :ship_it:).
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { CheckCircle2, CircleX, Loader2, Plus, Sparkles, Trash2, UploadCloud } from 'lucide-react'
+import { CheckCircle2, CircleX, Loader2, Plus, Sparkles, Tag, Trash2, UploadCloud, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { formatRelativeTime } from '@/lib/time'
+import { ALIAS_MAX, SHORTCODE_RE } from '@/lib/emoji-aliases'
 import { useCustomEmojiStore, type CustomEmojiDTO } from '@/lib/custom-emoji'
 
-const NAME_RE = /^[a-z0-9][a-z0-9_]{1,31}$/
+const NAME_RE = SHORTCODE_RE
 
 export function CustomEmojiSection() {
   const customEmoji = useCustomEmojiStore((s) => s.emoji)
@@ -28,6 +30,10 @@ export function CustomEmojiSection() {
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [confirmId, setConfirmId] = useState<string | null>(null)
+  const [aliasEditorId, setAliasEditorId] = useState<string | null>(null)
+  const [aliasDraft, setAliasDraft] = useState('')
+  const [aliasBusy, setAliasBusy] = useState(false)
+  const [aliasError, setAliasError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -112,6 +118,61 @@ export function CustomEmojiSection() {
     },
     [busyId, refresh],
   )
+
+  const openAliasEditor = (entry: CustomEmojiDTO) => {
+    setConfirmId(null)
+    setAliasError(null)
+    setAliasDraft('')
+    setAliasEditorId(aliasEditorId === entry.id ? null : entry.id)
+  }
+
+  const saveAliases = useCallback(
+    async (entry: CustomEmojiDTO, next: string[]) => {
+      if (aliasBusy) return
+      setAliasBusy(true)
+      setAliasError(null)
+      try {
+        const res = await fetch(`/api/admin/emoji/${entry.id}`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ aliases: next }),
+        })
+        const data = (await res.json()) as { aliases?: string[]; error?: string }
+        if (!res.ok || !data.aliases) throw new Error(data.error ?? 'Failed to save aliases')
+        toast.success(`Aliases updated for :${entry.name}:`, {
+          description: next.length > 0 ? `Also usable as ${next.map((a) => `:${a}:`).join(' ')}` : 'Alias list cleared.',
+        })
+        setAliasDraft('')
+        refresh()
+      } catch (err) {
+        setAliasError(err instanceof Error ? err.message : 'Failed to save aliases')
+      } finally {
+        setAliasBusy(false)
+      }
+    },
+    [aliasBusy, refresh],
+  )
+
+  const addAliasDraft = (entry: CustomEmojiDTO) => {
+    const alias = aliasDraft.trim().toLowerCase()
+    if (!SHORTCODE_RE.test(alias)) {
+      setAliasError('Alias: 2–32 lowercase letters, digits, underscores (e.g. "shipit")')
+      return
+    }
+    if (alias === entry.name) {
+      setAliasError(`:${alias}: is already the primary shortcode`)
+      return
+    }
+    if (entry.aliases.includes(alias)) {
+      setAliasError(`:${alias}: is already an alias`)
+      return
+    }
+    if (entry.aliases.length >= ALIAS_MAX) {
+      setAliasError(`At most ${ALIAS_MAX} aliases per emoji`)
+      return
+    }
+    void saveAliases(entry, [...entry.aliases, alias])
+  }
 
   return (
     <motion.div
@@ -246,7 +307,13 @@ export function CustomEmojiSection() {
         <p className="flex items-center justify-between gap-2 border-b border-border bg-muted/50 px-3.5 py-2.5 text-[13px] font-semibold">
           <span>
             Workspace emoji
-            {loaded && <span className="ml-1.5 text-xs font-normal text-muted-foreground">{customEmoji.length} total</span>}
+            {loaded && (
+              <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                {customEmoji.length} total
+                {customEmoji.some((e) => e.aliases.length > 0) &&
+                  ` · ${customEmoji.reduce((n, e) => n + e.aliases.length, 0)} aliases`}
+              </span>
+            )}
           </span>
           <span className="text-[11px] font-normal text-muted-foreground">admin-managed · everyone can use</span>
         </p>
@@ -268,16 +335,28 @@ export function CustomEmojiSection() {
             {customEmoji.map((entry) => (
               <div
                 key={entry.id}
-                className="group relative flex aspect-square cursor-default flex-col items-center justify-center gap-1.5 rounded-xl border border-border/60 bg-card/60 p-2 transition-all duration-150 hover:border-fuchsia-500/40 hover:bg-fuchsia-500/5"
+                className={cn(
+                  'group relative flex aspect-square cursor-default flex-col items-center justify-center gap-1 rounded-xl border border-border/60 bg-card/60 p-2 transition-all duration-150 hover:border-fuchsia-500/40 hover:bg-fuchsia-500/5',
+                  aliasEditorId === entry.id && 'border-fuchsia-500/60 bg-fuchsia-500/5',
+                )}
               >
                 <img
                   src={entry.url}
                   alt={`:${entry.name}:`}
-                  title={`:${entry.name}:`}
+                  title={`:${entry.name}:${entry.aliases.length > 0 ? ` (aliases: ${entry.aliases.map((a) => `:${a}:`).join(' ')})` : ''}`}
                   className="h-8 w-8 object-contain [image-rendering:pixelated]"
                   loading="lazy"
                 />
                 <span className="w-full truncate text-center font-mono text-[10px] text-muted-foreground">:{entry.name}:</span>
+                {entry.aliases.length > 0 && (
+                  <span className="flex max-w-full flex-wrap items-center justify-center gap-0.5" title={entry.aliases.map((a) => `:${a}:`).join(' ')}>
+                    <Tag className="h-2.5 w-2.5 shrink-0 text-fuchsia-500/80" aria-hidden />
+                    <span className="truncate font-mono text-[9px] text-fuchsia-600 dark:text-fuchsia-400">
+                      {entry.aliases.slice(0, 2).map((a) => `:${a}:`).join(' ')}
+                      {entry.aliases.length > 2 ? ` +${entry.aliases.length - 2}` : ''}
+                    </span>
+                  </span>
+                )}
                 <span className="absolute inset-x-0 bottom-0.5 text-center text-[9px] text-muted-foreground opacity-0 transition-opacity duration-150 group-hover:opacity-100">
                   added {formatRelativeTime(entry.createdAt)}
                 </span>
@@ -298,15 +377,90 @@ export function CustomEmojiSection() {
                       </Button>
                     </div>
                   </div>
-                ) : (
-                  <button
-                    type="button"
-                    aria-label={`Remove :${entry.name}:`}
-                    onClick={() => setConfirmId(entry.id)}
-                    className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-all duration-150 hover:bg-rose-500/10 hover:text-rose-500 group-hover:opacity-100"
-                  >
-                    <Trash2 className="h-3 w-3" aria-hidden />
-                  </button>
+                ) : aliasEditorId === entry.id ? (
+                  <div className="absolute inset-0 flex flex-col gap-1 rounded-xl bg-background/95 p-1.5">
+                    <p className="flex items-center gap-1 text-center text-[10px] font-semibold text-fuchsia-600 dark:text-fuchsia-400">
+                      <Tag className="h-3 w-3 shrink-0" aria-hidden />
+                      Aliases for :{entry.name}:
+                    </p>
+                    <div className="flex max-h-14 flex-wrap content-start items-start gap-1 overflow-y-auto">
+                      {entry.aliases.length === 0 && (
+                        <span className="text-[9px] leading-tight text-muted-foreground">None yet — add one below</span>
+                      )}
+                      {entry.aliases.map((alias) => (
+                        <span
+                          key={alias}
+                          className="inline-flex items-center gap-0.5 rounded-md border border-fuchsia-500/30 bg-fuchsia-500/10 px-1 py-0.5 font-mono text-[9px] text-fuchsia-700 dark:text-fuchsia-300"
+                        >
+                          :{alias}:
+                          <button
+                            type="button"
+                            aria-label={`Remove alias :${alias}:`}
+                            disabled={aliasBusy}
+                            onClick={() => void saveAliases(entry, entry.aliases.filter((a) => a !== alias))}
+                            className="rounded-sm text-muted-foreground transition-colors hover:text-rose-500"
+                          >
+                            <X className="h-2.5 w-2.5" aria-hidden />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                    <div className="mt-auto flex items-center gap-0.5">
+                      <input
+                        value={aliasDraft}
+                        onChange={(e) => {
+                          setAliasDraft(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))
+                          setAliasError(null)
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            addAliasDraft(entry)
+                          }
+                        }}
+                        placeholder="alias"
+                        maxLength={32}
+                        aria-label={`New alias for :${entry.name}:`}
+                        className="h-6 min-w-0 flex-1 rounded-md border border-border bg-background px-1.5 font-mono text-[10px] outline-none focus-visible:ring-1 focus-visible:ring-fuchsia-500"
+                      />
+                      <button
+                        type="button"
+                        aria-label="Add alias"
+                        disabled={aliasBusy || aliasDraft.length === 0}
+                        onClick={() => addAliasDraft(entry)}
+                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-fuchsia-600 text-white transition-colors hover:bg-fuchsia-700 disabled:opacity-50"
+                      >
+                        {aliasBusy ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : <Plus className="h-3 w-3" aria-hidden />}
+                      </button>
+                    </div>
+                    {aliasError && <p className="text-[9px] leading-tight text-rose-600 dark:text-rose-400">{aliasError}</p>}
+                  </div>
+                ) : null}
+                {confirmId !== entry.id && aliasEditorId !== entry.id && (
+                  <>
+                    <button
+                      type="button"
+                      aria-label={`Remove :${entry.name}:`}
+                      onClick={() => setConfirmId(entry.id)}
+                      className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-all duration-150 hover:bg-rose-500/10 hover:text-rose-500 group-hover:opacity-100"
+                    >
+                      <Trash2 className="h-3 w-3" aria-hidden />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={entry.aliases.length > 0 ? `Manage aliases for :${entry.name}: (${entry.aliases.length})` : `Add aliases for :${entry.name}:`}
+                      title="Aliases — extra shortcodes for this emoji"
+                      onClick={() => openAliasEditor(entry)}
+                      className={cn(
+                        'absolute left-1 top-1 flex h-6 w-6 items-center justify-center rounded-md transition-all duration-150 hover:bg-fuchsia-500/10 hover:text-fuchsia-500',
+                        entry.aliases.length > 0
+                          ? 'text-fuchsia-500/80 opacity-100 sm:opacity-0 sm:group-hover:opacity-100'
+                          : 'text-muted-foreground opacity-0 group-hover:opacity-100',
+                      )}
+                    >
+                      <Tag className="h-3 w-3" aria-hidden />
+                    </button>
+                  </>
                 )}
               </div>
             ))}
@@ -324,6 +478,7 @@ export function CustomEmojiSection() {
           <li>Type <code className="rounded bg-muted px-1 font-mono text-[11px]">:shortcode:</code> in any message — it renders inline.</li>
           <li>Find them in the emoji picker under the <span aria-hidden>✨</span> tab, or by searching the shortcode.</li>
           <li>React with them too — reactions accept custom emoji.</li>
+          <li>Aliases (the <Tag className="inline h-3 w-3" aria-hidden /> button) give an emoji extra shortcodes — <code className="rounded bg-muted px-1 font-mono text-[11px]">:shipit:</code> and <code className="rounded bg-muted px-1 font-mono text-[11px]">:ship_it:</code> can be the same emoji. Up to 10 per emoji, searchable in the picker.</li>
           <li>Built-in shortcodes win conflicts, and the uploader rejects shadowing names.</li>
         </ul>
       </div>

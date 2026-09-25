@@ -53,7 +53,7 @@ export function Rail() {
 
   const buttonClass = (active: boolean) =>
     cn(
-      'relative flex h-11 w-11 items-center justify-center rounded-xl text-zinc-600 transition-colors duration-150 dark:text-zinc-400',
+      'relative flex h-11 w-11 items-center justify-center rounded-xl text-zinc-700 transition-colors duration-150 dark:text-zinc-400',
       'hover:bg-zinc-200/80 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100',
       active && 'bg-zinc-200/80 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100',
     )

@@ -288,6 +288,8 @@ model CustomEmoji {
   org       Org      @relation(fields: [orgId], references: [id])
   // Shortcode used in messages/reactions, lowercase letters/digits/underscore, no colons
   name      String
+  // JSON string array of alias shortcodes — :alias: renders the same image
+  aliases   String?
   // Disk path of the stored image (png/jpg/gif/webp)
   path      String
   mimeType  String
