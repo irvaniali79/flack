@@ -8,6 +8,7 @@ import { maybeTriggerWorkflowsOnMessage } from '@/lib/workflows/runtime'
 import { serializeMessage, serializeNotification } from '@/lib/serialize'
 import type { MessageFull } from '@/lib/serialize'
 import { ensureThreadFollow, notifyThreadFollowers } from '@/lib/threads'
+import { isQuietHours } from '@/lib/dnd'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -168,6 +169,10 @@ export async function POST(request: Request, { params }: Params) {
     if (notifyUserIds.size > 0) {
       const where = channel.kind === 'dm' ? 'a DM' : channel.kind === 'group_dm' ? 'a group DM' : `#${channel.name}`
       const text = `${me.name} mentioned you in ${where}`
+      // Quiet hours per recipient: create suppressed, skip the ding
+      const quietByUser = new Map(
+        [...notifyUserIds].map((userId) => [userId, isQuietHours(humansById.get(userId))]),
+      )
       const notifications = await db.notification.createMany({
         data: [...notifyUserIds].map((userId) => ({
           userId,
@@ -176,6 +181,7 @@ export async function POST(request: Request, { params }: Params) {
           messageId: message.id,
           actorId: me.id,
           body: text,
+          suppressed: quietByUser.get(userId) ?? false,
         })),
       })
       if (notifications.count > 0) {
@@ -186,6 +192,7 @@ export async function POST(request: Request, { params }: Params) {
         const byUser = new Map<string, typeof created>()
         for (const n of created) byUser.set(n.userId, [...(byUser.get(n.userId) ?? []), n])
         for (const [userId, list] of byUser) {
+          if (quietByUser.get(userId)) continue // in quiet hours — no ding
           // Only the newest notification for that user (one per message)
           const latest = list[list.length - 1]
           const dto = serializeNotification({

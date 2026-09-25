@@ -45,6 +45,9 @@ model User {
   statusEmoji  String?
   statusText   String?
   dndEnabled   Boolean  @default(false)
+  // Quiet-hours window "HH:MM" 24h (e.g. "22:00" / "07:00", may wrap midnight)
+  dndStart     String?
+  dndEnd       String?
   isActive     Boolean  @default(true)
   externalId   String?
   createdAt    DateTime @default(now())
@@ -296,6 +299,9 @@ model Notification {
   actorId   String?
   body      String
   readAt    DateTime?
+  // true = created during the recipient's quiet hours — hidden from badges and
+  // dings until the digest release (scheduler tick) flips it when the window ends
+  suppressed Boolean  @default(false)
   createdAt DateTime  @default(now())
 
   @@index([userId, readAt])

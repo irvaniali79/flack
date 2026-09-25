@@ -8,7 +8,7 @@
 //        in-app tool playground uses.
 //
 // Methods: initialize · notifications/initialized · ping · tools/list ·
-//          tools/call · resources/list · prompts/list
+//          tools/call · resources/list · resources/read · prompts/list
 import { db } from '@/lib/db'
 import { getSessionUser } from '@/lib/auth'
 import { requireApiKeyUser, TOOL_SCOPE_REQUIREMENTS } from '@/lib/api-keys'
@@ -179,7 +179,9 @@ async function handleMessage(request: Request, msg: JsonRpcRequest): Promise<Res
         serverInfo: SERVER_INFO,
         instructions:
           'Acme Chat MCP server. Tools: post_message, read_channel, search_messages, list_channels, ' +
-          'get_thread, add_reaction, create_channel. All actions run as ' +
+          'get_thread, add_reaction, create_channel. Resources: acme://channels/{slug} ' +
+          '(recent messages — list with resources/list, read with resources/read). ' +
+          'All actions run as ' +
           actor.user.name + '.',
       })
 
@@ -193,8 +195,98 @@ async function handleMessage(request: Request, msg: JsonRpcRequest): Promise<Res
     case 'tools/list':
       return ok(id, { tools: MCP_TOOLS })
 
-    case 'resources/list':
-      return ok(id, { resources: [] })
+    case 'resources/list': {
+      // One resource per channel the actor can read (member channels + public)
+      const channels = await db.channel.findMany({
+        where: {
+          orgId: actor.user.orgId,
+          isArchived: false,
+          OR: [{ members: { some: { userId: actor.user.id } } }, { kind: 'public' }],
+        },
+        select: {
+          slug: true,
+          name: true,
+          kind: true,
+          topic: true,
+          members: {
+            where: { userId: { not: actor.user.id } },
+            select: { user: { select: { name: true } } },
+            take: 5,
+          },
+        },
+        orderBy: { name: 'asc' },
+      })
+      return ok(id, {
+        resources: channels.map((c) => {
+          const otherNames = c.members.map((m) => m.user.name)
+          const label =
+            c.kind === 'dm'
+              ? `DM: ${otherNames[0] ?? 'Direct message'}`
+              : c.kind === 'group_dm'
+                ? `Group DM: ${otherNames.slice(0, 3).join(', ')}${otherNames.length > 3 ? ` +${otherNames.length - 3}` : ''}`
+                : `#${c.slug}`
+          return {
+            uri: `acme://channels/${c.slug}`,
+            name: label,
+            description:
+              (c.topic && c.topic.trim().slice(0, 120)) ||
+              `${c.kind === 'public' ? 'Public' : c.kind === 'private' ? 'Private' : c.kind === 'dm' ? 'Direct message' : 'Group DM'} channel — ${c.name}`,
+            mimeType: 'application/json',
+          }
+        }),
+      })
+    }
+
+    case 'resources/read': {
+      const uri = typeof msg.params?.uri === 'string' ? msg.params.uri : ''
+      // Scope enforcement mirrors tools (session playground = full access)
+      if (actor.scopes && !actor.scopes.has('channels:read')) {
+        return err(id, -32602, 'This API key lacks the "channels:read" scope required for resources')
+      }
+      const match = /^acme:\/\/channels\/([a-z0-9-]+)$/.exec(uri)
+      if (!match) {
+        return err(id, -32602, 'Invalid resource uri — expected acme://channels/{slug} (list with resources/list)')
+      }
+      const channel = await db.channel.findFirst({
+        where: { orgId: actor.user.orgId, slug: match[1] },
+        include: { members: { where: { userId: actor.user.id }, select: { userId: true } } },
+      })
+      if (!channel || (channel.kind !== 'public' && channel.members.length === 0)) {
+        return err(id, -32602, `Resource not found: ${uri}`)
+      }
+      const messages = await db.message.findMany({
+        where: { channelId: channel.id, deletedAt: null },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 50,
+        include: {
+          sender: { select: { name: true } },
+          reactions: { select: { emoji: true } },
+        },
+      })
+      return ok(id, {
+        contents: [
+          {
+            uri,
+            mimeType: 'application/json',
+            text: JSON.stringify(
+              {
+                channel: { slug: channel.slug, name: channel.name, kind: channel.kind, topic: channel.topic },
+                messages: messages.reverse().map((m) => ({
+                  ts: m.id,
+                  thread_ts: m.parentId ?? null,
+                  user: m.sender?.name ?? 'Unknown',
+                  text: m.body,
+                  reactions: m.reactions.map((r) => r.emoji),
+                  ts_created: m.createdAt.toISOString(),
+                })),
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      })
+    }
 
     case 'prompts/list':
       return ok(id, { prompts: [] })
@@ -258,7 +350,7 @@ export async function GET() {
       version: SERVER_INFO.version,
       protocolVersion: PROTOCOL_VERSION,
       transport: 'http-jsonrpc',
-      methods: ['initialize', 'notifications/initialized', 'ping', 'tools/list', 'tools/call', 'resources/list', 'prompts/list'],
+      methods: ['initialize', 'notifications/initialized', 'ping', 'tools/list', 'tools/call', 'resources/list', 'resources/read', 'prompts/list'],
       auth: 'Authorization: Bearer acme_… (API key) — manage keys in the app: Integrations view',
       note: 'Send JSON-RPC 2.0 requests via POST. SSE streaming is not enabled.',
     },

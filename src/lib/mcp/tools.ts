@@ -10,6 +10,7 @@ import { maybeInvokeAgents } from '@/lib/agents/runtime'
 import { maybeTriggerWorkflowsOnMessage } from '@/lib/workflows/runtime'
 import { slackEmojiToChar } from '@/lib/slack/compat'
 import { notifyThreadFollowers } from '@/lib/threads'
+import { isQuietHours } from '@/lib/dnd'
 
 export type McpTool = {
   name: string
@@ -290,6 +291,8 @@ export async function toolPostMessage(
         messageId: message.id,
         actorId: actor.id,
         body: `${actor.name} mentioned you in ${where}`,
+        // Quiet hours: store silently, digest delivers later
+        suppressed: isQuietHours(members.find((m) => m.userId === userId)?.user),
       })),
     })
   }

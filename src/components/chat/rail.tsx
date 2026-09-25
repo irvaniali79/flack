@@ -4,6 +4,7 @@ import {
   Hash,
   LogOut,
   MessageSquare,
+  MessagesSquare,
   Moon,
   Plug,
   Settings,
@@ -25,6 +26,7 @@ import { cn } from '@/lib/utils'
 export function Rail() {
   const { resolvedTheme, setTheme } = useTheme()
   const channels = useChatStore((s) => s.channels)
+  const notifications = useChatStore((s) => s.notifications)
   const activeChannelId = useChatStore((s) => s.activeChannelId)
   const openChannel = useChatStore((s) => s.openChannel)
   const setNewDmOpen = useChatStore((s) => s.setNewDmOpen)
@@ -36,6 +38,11 @@ export function Rail() {
 
   const general = channels.find((c) => c.slug === 'general') ?? channels.find((c) => c.kind === 'public')
   const isAdmin = me?.role === 'owner' || me?.role === 'admin'
+
+  // Unread thread replies — powers the Threads rail badge
+  const threadUnread = notifications.filter(
+    (n) => n.type === 'thread_reply' && !n.readAt && !n.suppressed,
+  ).length
 
   const homeActive = view === 'chat' && !!activeChannelId && general?.id === activeChannelId
 
@@ -90,6 +97,27 @@ export function Rail() {
             </button>
           </TooltipTrigger>
           <TooltipContent side="right">Home</TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              aria-label={`Threads${threadUnread > 0 ? ` — ${threadUnread} unread replies` : ''}`}
+              aria-pressed={view === 'threads'}
+              onClick={() => setView('threads')}
+              className={cn(buttonClass(view === 'threads'), 'group')}
+            >
+              <MessagesSquare className="h-5 w-5" aria-hidden />
+              {threadUnread > 0 && (
+                <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-500 px-1 text-[9px] font-bold text-white">
+                  {threadUnread > 9 ? '9+' : threadUnread}
+                </span>
+              )}
+              <span className={accentClass(view === 'threads')} aria-hidden />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right">Threads you follow</TooltipContent>
         </Tooltip>
 
         <Tooltip>

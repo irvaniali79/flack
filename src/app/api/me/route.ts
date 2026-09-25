@@ -10,12 +10,17 @@ export async function GET() {
   })
 }
 
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/
+
 const patchSchema = z.object({
   name: z.string().trim().min(2).max(80).optional(),
   title: z.string().trim().max(120).nullable().optional(),
   statusEmoji: z.string().trim().max(16).nullable().optional(),
   statusText: z.string().trim().max(120).nullable().optional(),
   dndEnabled: z.boolean().optional(),
+  // Quiet-hours window, "HH:MM" 24h — null clears the schedule
+  dndStart: z.string().regex(HHMM, 'Use HH:MM (24h)').nullable().optional(),
+  dndEnd: z.string().regex(HHMM, 'Use HH:MM (24h)').nullable().optional(),
   timezone: z.string().trim().max(64).optional(),
 })
 

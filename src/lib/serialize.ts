@@ -36,6 +36,8 @@ export function serializeUser(user: UserWithAgent): UserDTO {
     statusEmoji: user.statusEmoji,
     statusText: user.statusText,
     dndEnabled: user.dndEnabled,
+    dndStart: user.dndStart,
+    dndEnd: user.dndEnd,
     isActive: user.isActive,
     handle: user.agent?.handle,
     timezone: user.timezone,
@@ -196,6 +198,7 @@ export function serializeNotification(n: NotificationFull): NotificationDTO {
     body: n.body,
     actorName: n.actor?.name ?? null,
     readAt: n.readAt?.toISOString() ?? null,
+    suppressed: n.suppressed,
     createdAt: n.createdAt.toISOString(),
   }
 }

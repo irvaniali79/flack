@@ -9,9 +9,10 @@ import { emitToChannel, emitToUsers } from '@/lib/realtime-server'
 import { parseMentions } from '@/lib/mentions'
 import { maybeInvokeAgents } from '@/lib/agents/runtime'
 import { maybeTriggerWorkflowsOnMessage } from '@/lib/workflows/runtime'
-import { serializeMessage } from '@/lib/serialize'
+import { serializeMessage, serializeNotification } from '@/lib/serialize'
 import type { MessageFull } from '@/lib/serialize'
 import { writeAudit } from '@/lib/audit'
+import { isQuietHours } from '@/lib/dnd'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -118,6 +119,10 @@ export async function POST(request: Request, { params }: Params) {
     if (notifyUserIds.size > 0) {
       const where =
         target.kind === 'dm' ? 'a DM' : target.kind === 'group_dm' ? 'a group DM' : `#${target.name}`
+      // Quiet hours per recipient — stored suppressed, no ding (digest delivers later)
+      const quietByUser = new Map(
+        [...notifyUserIds].map((userId) => [userId, isQuietHours(humansById.get(userId))]),
+      )
       await db.notification.createMany({
         data: [...notifyUserIds].map((userId) => ({
           userId,
@@ -126,11 +131,26 @@ export async function POST(request: Request, { params }: Params) {
           messageId: message.id,
           actorId: me.id,
           body: `${me.name} mentioned you in ${where}`,
+          suppressed: quietByUser.get(userId) ?? false,
         })),
       })
-      void emitToUsers([...notifyUserIds], 'notification:new', { count: notifyUserIds.size }).catch(
-        () => {},
-      )
+      // Realtime ding per non-quiet user — proper DTOs so the client toasts
+      const created = await db.notification.findMany({
+        where: { messageId: message.id, userId: { in: [...notifyUserIds] } },
+        orderBy: { createdAt: 'asc' },
+      })
+      const byUser = new Map<string, typeof created>()
+      for (const n of created) byUser.set(n.userId, [...(byUser.get(n.userId) ?? []), n])
+      for (const [userId, list] of byUser) {
+        if (quietByUser.get(userId)) continue // in quiet hours — no ding
+        const latest = list[list.length - 1]
+        const dto = serializeNotification({
+          ...latest,
+          channel: { name: target.name },
+          actor: { name: me.name },
+        })
+        void emitToUsers([userId], 'notification:new', dto).catch(() => {})
+      }
     }
 
     const dto = serializeMessage(message as MessageFull)

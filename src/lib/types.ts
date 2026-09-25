@@ -12,6 +12,8 @@ export interface UserDTO {
   statusEmoji: string | null
   statusText: string | null
   dndEnabled: boolean
+  dndStart: string | null
+  dndEnd: string | null
   isActive: boolean
   handle?: string // agents only
   timezone?: string
@@ -97,7 +99,37 @@ export interface NotificationDTO {
   body: string
   actorName?: string | null
   readAt: string | null
+  /** true while held back by quiet hours — delivered as a digest when the window ends */
+  suppressed: boolean
   createdAt: string
+}
+
+// ─── Threads view ────────────────────────────────────────────────────────────
+
+export interface ThreadCardDTO {
+  /** thread root message id */
+  rootId: string
+  root: {
+    id: string
+    body: string
+    createdAt: string
+    senderName: string | null
+    senderColor: string | null
+    senderKind: 'human' | 'agent' | null
+  }
+  channel: {
+    id: string
+    name: string
+    slug: string
+    kind: 'public' | 'private' | 'dm' | 'group_dm'
+  }
+  replyCount: number
+  /** up to 3 participant avatars + the total count */
+  participants: { id: string; name: string; avatarColor: string; kind: 'human' | 'agent' }[]
+  participantCount: number
+  lastActivityAt: string
+  unreadReplies: number
+  following: boolean
 }
 
 // ─── Workflows ───────────────────────────────────────────────────────────────

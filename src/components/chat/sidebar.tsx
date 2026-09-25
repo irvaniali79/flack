@@ -13,7 +13,9 @@ import {
   Keyboard,
   Lock,
   LogOut,
+  MessagesSquare,
   Moon,
+  MoonStar,
   PenLine,
   Plug,
   Plus,
@@ -44,6 +46,7 @@ import { UserAvatar } from './avatar'
 import { PresenceDot } from './presence-dot'
 import { AgentDialog } from './agents/agent-dialog'
 import { formatRelativeTime } from '@/lib/time'
+import { isQuietHours, quietUntilLabel } from '@/lib/dnd'
 import { AtSign, CornerDownRight } from 'lucide-react'
 
 // ─── notification bell ───────────────────────────────────────────────────────
@@ -79,11 +82,18 @@ function NotificationBell() {
   const fetchNotifications = useChatStore((s) => s.fetchNotifications)
   const markNotificationsRead = useChatStore((s) => s.markNotificationsRead)
   const openChannel = useChatStore((s) => s.openChannel)
+  const me = useChatStore((s) => s.me)
   const [open, setOpen] = useState(false)
 
   useEffect(() => {
     if (open) void fetchNotifications()
   }, [open, fetchNotifications])
+
+  const quiet = me ? isQuietHours(me) : false
+  const quietUntil = me ? quietUntilLabel(me) : null
+  // Suppressed (quiet-hours) rows render in their own section, not as unread
+  const active = notifications.filter((n) => !n.suppressed)
+  const quietRows = notifications.filter((n) => n.suppressed)
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -113,58 +123,118 @@ function NotificationBell() {
             <CheckCheck className="h-3.5 w-3.5" aria-hidden /> Mark all read
           </Button>
         </div>
+        {quiet && (
+          <div className="flex items-center gap-2 border-b border-amber-500/20 bg-amber-500/10 px-3 py-2">
+            <MoonStar className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
+            <p className="text-[11px] font-medium leading-snug text-amber-800 dark:text-amber-200">
+              Quiet hours{quietUntil ? ` — notifications arrive silently until ${quietUntil}` : ' — notifications arrive silently'}
+            </p>
+          </div>
+        )}
         <div className="max-h-96 overflow-y-auto p-1.5">
-          {notifications.length === 0 ? (
+          {active.length === 0 && quietRows.length === 0 ? (
             <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
               <BellOff className="h-8 w-8 text-muted-foreground/50" aria-hidden />
               <p className="text-sm text-muted-foreground">You&rsquo;re all caught up</p>
             </div>
           ) : (
-            notifications.map((notification) => {
-              const style = TYPE_STYLES[notification.type] ?? FALLBACK_STYLE
-              const Icon = style.icon ?? Bell
-              return (
-              <button
-                key={notification.id}
-                type="button"
-                onClick={() => {
-                  if (notification.channelId) {
-                    void openChannel(notification.channelId)
-                  }
-                  setOpen(false)
-                }}
-                className={cn(
-                  'flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors duration-150 hover:bg-accent',
-                  !notification.readAt && 'bg-emerald-500/5',
-                )}
-              >
-                <span
+            <>
+              {active.map((notification) => {
+                const style = TYPE_STYLES[notification.type] ?? FALLBACK_STYLE
+                const Icon = style.icon ?? Bell
+                return (
+                <button
+                  key={notification.id}
+                  type="button"
+                  onClick={() => {
+                    if (notification.channelId) {
+                      void openChannel(notification.channelId)
+                    }
+                    // Reading it = read (single-row mark)
+                    if (!notification.readAt) {
+                      void markNotificationsRead([notification.id])
+                    }
+                    setOpen(false)
+                  }}
                   className={cn(
-                    'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md',
-                    style.classes,
+                    'flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors duration-150 hover:bg-accent',
+                    !notification.readAt && 'bg-emerald-500/5',
                   )}
-                  aria-hidden
                 >
-                  <Icon className="h-3.5 w-3.5" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[13px] leading-snug">{notification.body}</span>
-                  <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                    <span className="font-medium">{style.label}</span>
-                    <span aria-hidden>·</span>
-                    <span>{formatRelativeTime(notification.createdAt)}</span>
-                    {notification.channelName ? <span aria-hidden>· {notification.channelName}</span> : null}
-                  </span>
-                </span>
-                {!notification.readAt && (
                   <span
-                    className="mt-2 h-2 w-2 shrink-0 rounded-full bg-emerald-500"
-                    aria-label="Unread"
-                  />
-                )}
-              </button>
-              )
-            })
+                    className={cn(
+                      'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md',
+                      style.classes,
+                    )}
+                    aria-hidden
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[13px] leading-snug">{notification.body}</span>
+                    <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                      <span className="font-medium">{style.label}</span>
+                      <span aria-hidden>·</span>
+                      <span>{formatRelativeTime(notification.createdAt)}</span>
+                      {notification.channelName ? <span aria-hidden>· {notification.channelName}</span> : null}
+                    </span>
+                  </span>
+                  {!notification.readAt && (
+                    <span
+                      className="mt-2 h-2 w-2 shrink-0 rounded-full bg-emerald-500"
+                      aria-label="Unread"
+                    />
+                  )}
+                </button>
+                )
+              })}
+              {quietRows.length > 0 && (
+                <div className="mt-1">
+                  <p className="flex items-center gap-1.5 px-2.5 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                    <MoonStar className="h-3 w-3" aria-hidden /> Delivered quietly
+                  </p>
+                  {quietRows.map((notification) => {
+                    const style = TYPE_STYLES[notification.type] ?? FALLBACK_STYLE
+                    const Icon = style.icon ?? Bell
+                    return (
+                      <button
+                        key={notification.id}
+                        type="button"
+                        onClick={() => {
+                          if (notification.channelId) {
+                            void openChannel(notification.channelId)
+                          }
+                          void markNotificationsRead([notification.id])
+                          setOpen(false)
+                        }}
+                        className="flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left opacity-70 transition-all duration-150 hover:bg-accent hover:opacity-100"
+                      >
+                        <span
+                          className={cn(
+                            'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md opacity-60',
+                            style.classes,
+                          )}
+                          aria-hidden
+                        >
+                          <Icon className="h-3.5 w-3.5" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-[13px] leading-snug">{notification.body}</span>
+                          <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                            <span className="font-medium">{style.label}</span>
+                            <span aria-hidden>·</span>
+                            <span>{formatRelativeTime(notification.createdAt)}</span>
+                          </span>
+                        </span>
+                      </button>
+                    )
+                  })}
+                  <p className="px-2.5 pb-1 pt-0.5 text-[10px] leading-snug text-muted-foreground">
+                    Held back by quiet hours — delivered with a digest when your window ends.
+                  </p>
+                </div>
+              )}
+            </>
           )}
         </div>
       </PopoverContent>
@@ -374,8 +444,20 @@ export function Sidebar({
               aria-label="Workspace menu"
               className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-1.5 py-1.5 transition-colors duration-150 hover:bg-accent"
             >
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-600 text-xs font-black text-white">
+              <span className="relative flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-600 text-xs font-black text-white">
                 A
+                {me && me.dndEnabled && (
+                  <span
+                    className={cn(
+                      'absolute -bottom-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full ring-2 ring-zinc-50 dark:ring-zinc-900',
+                      isQuietHours(me) ? 'bg-amber-500' : 'bg-zinc-400 dark:bg-zinc-600',
+                    )}
+                    title="Do Not Disturb"
+                    aria-label="Do Not Disturb is on"
+                  >
+                    <MoonStar className="h-2 w-2 text-white" aria-hidden />
+                  </span>
+                )}
               </span>
               <span className="min-w-0 flex-1 truncate text-left text-sm font-bold">{orgName}</span>
               <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
@@ -387,6 +469,22 @@ export function Sidebar({
             <DropdownMenuItem disabled className="gap-2 opacity-50">
               <PenLine className="h-4 w-4" aria-hidden /> Invite teammates
               <span className="ml-auto text-[10px] text-muted-foreground">soon</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="gap-2"
+              onClick={() => {
+                const next = !(me?.dndEnabled ?? false)
+                void useChatStore.getState().updateMe({ dndEnabled: next })
+                toast.success(next ? 'Do Not Disturb is on' : 'Do Not Disturb is off')
+              }}
+            >
+              <MoonStar className="h-4 w-4" aria-hidden />
+              {me?.dndEnabled ? 'Turn off Do Not Disturb' : 'Turn on Do Not Disturb'}
+              {me?.dndEnabled && me.dndStart && me.dndEnd && (
+                <span className="ml-auto text-[10px] text-muted-foreground">
+                  {me.dndStart}–{me.dndEnd}
+                </span>
+              )}
             </DropdownMenuItem>
             <DropdownMenuItem
               className="gap-2"
@@ -470,6 +568,7 @@ export function Sidebar({
               Workspace
             </p>
             <div className="space-y-0.5">
+              <WorkspaceRow icon={MessagesSquare} label="Threads" title="Threads you follow" target="threads" />
               <WorkspaceRow icon={Zap} label="Workflows" target="workflows" />
               <WorkspaceRow
                 icon={Plug}

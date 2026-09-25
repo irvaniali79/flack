@@ -24,6 +24,7 @@ import { ImageViewer } from './dialogs/image-viewer'
 import { ShortcutsDialog } from './shortcuts-dialog'
 import { SavedView } from './saved-view'
 import { ForwardDialog } from './dialogs/forward-dialog'
+import { ThreadsView } from './threads-view'
 import { WorkflowsView } from './workflows/workflows-view'
 import { AdminView } from './admin/admin-view'
 import { IntegrationsView } from './integrations/integrations-view'
@@ -194,6 +195,8 @@ export function ChatApp() {
           >
             {view === 'workflows' ? (
               <WorkflowsView />
+            ) : view === 'threads' ? (
+              <ThreadsView />
             ) : view === 'admin' ? (
               <AdminView />
             ) : view === 'saved' ? (

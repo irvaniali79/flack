@@ -3,7 +3,7 @@
 // Kept separate from src/lib/store.ts on purpose — do not merge.
 import { create } from 'zustand'
 
-export type MainView = 'chat' | 'workflows' | 'admin' | 'saved' | 'integrations'
+export type MainView = 'chat' | 'threads' | 'workflows' | 'admin' | 'saved' | 'integrations'
 
 interface ViewStore {
   view: MainView

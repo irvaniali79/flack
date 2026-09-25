@@ -5,6 +5,7 @@ import { db } from '@/lib/db'
 import { emitAgentTyping, emitToChannel, emitToUsers } from '@/lib/realtime-server'
 import { serializeMessage, serializeNotification, type MessageFull } from '@/lib/serialize'
 import { parseMentions } from '@/lib/mentions'
+import { isQuietHours } from '@/lib/dnd'
 import { callLLM, type LLMMessage } from './llm'
 import type { Agent, Channel, User } from '@prisma/client'
 
@@ -95,7 +96,9 @@ async function notifyMentionedHumans(
   try {
     const members = await db.channelMember.findMany({
       where: { channelId: channel.id, user: { kind: 'human', isActive: true } },
-      include: { user: { select: { id: true, name: true } } },
+      include: {
+        user: { select: { id: true, name: true, dndEnabled: true, dndStart: true, dndEnd: true } },
+      },
     })
     const { userIds, specials } = parseMentions(
       created.body,
@@ -109,6 +112,10 @@ async function notifyMentionedHumans(
     const isSpecial = specials.length > 0
     const channelLabel = channel.kind === 'dm' ? 'a DM' : `#${channel.name}`
     const text = `${agentUser.name} ${isSpecial ? 'mentioned the channel' : 'mentioned you'} in ${channelLabel}`
+    // Quiet hours per recipient — stored suppressed, no ding (digest delivers later)
+    const quietByUser = new Map(
+      members.map((m) => [m.user.id, isQuietHours(m.user)] as [string, boolean]),
+    )
     await db.notification.createMany({
       data: targetIds.map((userId) => ({
         userId,
@@ -117,6 +124,7 @@ async function notifyMentionedHumans(
         messageId: created.id,
         actorId: agentUser.id,
         body: text,
+        suppressed: quietByUser.get(userId) ?? false,
       })),
     })
     const rows = await db.notification.findMany({
@@ -126,6 +134,7 @@ async function notifyMentionedHumans(
     const byUser = new Map<string, typeof rows>()
     for (const n of rows) byUser.set(n.userId, [...(byUser.get(n.userId) ?? []), n])
     for (const [userId, list] of byUser) {
+      if (quietByUser.get(userId)) continue // in quiet hours — no ding
       const latest = list[list.length - 1]
       const dto = serializeNotification({
         ...latest,

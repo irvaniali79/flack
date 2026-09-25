@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useTheme } from 'next-themes'
 import { toast } from 'sonner'
-import { BellOff, Check, Clock, Mail, Monitor, Moon, Smile, Sun } from 'lucide-react'
+import { BellOff, Check, Clock, Mail, MoonStar, Monitor, Moon, Smile, Sun } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -26,6 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import { useChatStore } from '@/lib/store'
 import { localTimezoneLabel } from '@/lib/time'
+import { formatHHmm, isQuietHours, quietUntilLabel } from '@/lib/dnd'
 import { UserAvatar } from '../avatar'
 import { EmojiPicker } from '../emoji-picker'
 
@@ -70,6 +71,8 @@ export function SettingsDialog() {
   const [busy, setBusy] = useState(false)
   const [dndBusy, setDndBusy] = useState(false)
   const [emojiOpen, setEmojiOpen] = useState(false)
+  const [dndStart, setDndStart] = useState('')
+  const [dndEnd, setDndEnd] = useState('')
 
   const [lastOpen, setLastOpen] = useState(open)
   if (open !== lastOpen) {
@@ -80,6 +83,8 @@ export function SettingsDialog() {
       setStatusEmoji(me.statusEmoji ?? '')
       setStatusText(me.statusText ?? '')
       setTimezone(me.timezone ?? 'UTC')
+      setDndStart(me.dndStart ?? '')
+      setDndEnd(me.dndEnd ?? '')
     }
   }
 
@@ -114,6 +119,28 @@ export function SettingsDialog() {
       toast.success(next ? 'Do Not Disturb is on' : 'Do Not Disturb is off')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not update preference')
+    } finally {
+      setDndBusy(false)
+    }
+  }
+
+  const saveQuietSchedule = async (start: string, end: string) => {
+    if (dndBusy) return
+    setDndBusy(true)
+    try {
+      await updateMe({
+        dndStart: start || null,
+        dndEnd: end || null,
+        // Turning on a schedule implies enabling DND for the window
+        ...(start && end && !me?.dndEnabled ? { dndEnabled: true } : {}),
+      })
+      toast.success(
+        start && end
+          ? `Quiet hours scheduled — ${formatHHmm(start)} to ${formatHHmm(end)}`
+          : 'Quiet-hours schedule cleared (all-day DND while on)',
+      )
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not save schedule')
     } finally {
       setDndBusy(false)
     }
@@ -271,10 +298,100 @@ export function SettingsDialog() {
                   />
                 </div>
                 <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                  While Do Not Disturb is on, new messages won&apos;t surface notifications or
-                  badges — your workspace stays quiet until you turn it off.
+                  While Do Not Disturb is on, notifications arrive silently — no
+                  dings, no badges. Nothing is lost: when it ends you get a
+                  single digest with everything that happened.
                 </p>
+                {me.dndEnabled && (
+                  <span
+                    className={cn(
+                      'mt-2.5 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold',
+                      isQuietHours(me)
+                        ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                        : 'bg-muted text-muted-foreground',
+                    )}
+                  >
+                    <MoonStar className="h-3 w-3" aria-hidden />
+                    {isQuietHours(me)
+                      ? quietUntilLabel(me)
+                        ? `Quiet until ${quietUntilLabel(me)}`
+                        : 'Quiet all day'
+                      : me.dndStart && me.dndEnd
+                        ? `Scheduled ${formatHHmm(me.dndStart)} – ${formatHHmm(me.dndEnd)} (outside the window now)`
+                        : 'Active — outside a scheduled window it stays quiet all day'}
+                  </span>
+                )}
               </div>
+            </div>
+
+            {/* Quiet-hours schedule */}
+            <div className="space-y-2.5 rounded-xl border border-border p-4">
+              <div className="flex items-center gap-2">
+                <MoonStar className="h-4 w-4 text-amber-500" aria-hidden />
+                <Label className="text-sm font-semibold">Quiet hours schedule</Label>
+              </div>
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                Set a daily window (it can wrap past midnight). Notifications
+                created inside the window are held back and delivered as a
+                digest when it ends.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="settings-dnd-start" className="text-xs text-muted-foreground">
+                    From
+                  </Label>
+                  <Input
+                    id="settings-dnd-start"
+                    type="time"
+                    value={dndStart}
+                    onChange={(e) => setDndStart(e.target.value)}
+                    className="rounded-lg"
+                    aria-label="Quiet hours start time"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="settings-dnd-end" className="text-xs text-muted-foreground">
+                    To
+                  </Label>
+                  <Input
+                    id="settings-dnd-end"
+                    type="time"
+                    value={dndEnd}
+                    onChange={(e) => setDndEnd(e.target.value)}
+                    className="rounded-lg"
+                    aria-label="Quiet hours end time"
+                  />
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {[
+                  { label: '9 PM – 7 AM', start: '21:00', end: '07:00' },
+                  { label: '10 PM – 6 AM', start: '22:00', end: '06:00' },
+                  { label: 'Noon break', start: '12:00', end: '13:00' },
+                ].map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    disabled={dndBusy}
+                    onClick={() => {
+                      setDndStart(preset.start)
+                      setDndEnd(preset.end)
+                      void saveQuietSchedule(preset.start, preset.end)
+                    }}
+                    className="rounded-full border border-border px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors duration-150 hover:border-amber-500/50 hover:bg-amber-500/10 hover:text-amber-700 disabled:opacity-50 dark:hover:text-amber-300"
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+              <Button
+                size="sm"
+                disabled={dndBusy || (!dndStart && !dndEnd)}
+                onClick={() => void saveQuietSchedule(dndStart, dndEnd)}
+                className="w-full rounded-lg bg-amber-600 font-semibold text-white hover:bg-amber-500"
+              >
+                {dndBusy ? 'Saving…' : 'Save schedule'}
+              </Button>
             </div>
 
             <div className="rounded-xl bg-muted/50 p-3.5 text-xs leading-relaxed text-muted-foreground">

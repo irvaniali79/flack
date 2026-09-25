@@ -4,6 +4,7 @@
 import { io, type Socket } from 'socket.io-client'
 import { toast } from 'sonner'
 import { useChatStore } from './store'
+import { isQuietHours } from './dnd'
 import type { MessageDTO, NotificationDTO, ReactionDTO } from './types'
 
 let socket: Socket | null = null
@@ -119,7 +120,8 @@ export function initSocket(userId: string, name: string): void {
     const state = store.getState()
     state.handleNotification(notification)
     const me = state.me
-    if (!me || me.dndEnabled) return
+    // Quiet hours (manual DND or scheduled window): no toast ding
+    if (!me || isQuietHours(me)) return
     const who = notification.actorName ?? 'Someone'
     const headline =
       notification.type === 'thread_reply'
@@ -140,6 +142,22 @@ export function initSocket(userId: string, name: string): void {
           }
         : undefined,
     })
+  })
+
+  socket.on('notification:digest', (payload: { count?: number }) => {
+    // Quiet hours ended — held-back notifications were released
+    const count = typeof payload?.count === 'number' ? payload.count : 0
+    if (count <= 0) return
+    toast(`📬 While you were away — ${count} notification${count === 1 ? '' : 's'}`, {
+      description: 'Your quiet hours ended. Everything that happened is in your notifications.',
+      action: {
+        label: 'View',
+        onClick: () => {
+          void useChatStore.getState().fetchNotifications()
+        },
+      },
+    })
+    void store.getState().fetchNotifications()
   })
 
   socket.on('channels:refresh', () => {

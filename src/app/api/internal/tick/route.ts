@@ -1,7 +1,9 @@
 // Internal scheduler tick endpoint — called every 60s by the scheduler
 // mini-service (mini-services/scheduler-service, port 3004) with a shared
-// secret. Fires all due schedule workflows via runScheduledTick().
+// secret. Fires all due schedule workflows via runScheduledTick() and
+// releases quiet-hours digest notifications whose window has ended.
 import { runScheduledTick } from '@/lib/workflows/runtime'
+import { releaseQuietDigests } from '@/lib/quiet-digest'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,7 +15,8 @@ export async function POST(request: Request) {
   }
   try {
     const fired = await runScheduledTick()
-    return Response.json({ ok: true, fired })
+    const released = await releaseQuietDigests().catch(() => 0)
+    return Response.json({ ok: true, fired, released })
   } catch {
     // Never leak internal error details to the caller.
     return Response.json({ ok: false }, { status: 500 })

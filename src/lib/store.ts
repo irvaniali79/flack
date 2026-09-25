@@ -181,7 +181,7 @@ interface ChatState {
   setNotifyPrefs: (channelId: string, patch: { notifyLevel?: ChannelDTO['notifyLevel']; muted?: boolean }) => Promise<void>
   markChannelRead: (channelId: string, messageId: string | null) => void
   setDraft: (channelId: string, text: string) => void
-  updateMe: (patch: Partial<Pick<UserDTO, 'name' | 'title' | 'statusEmoji' | 'statusText' | 'dndEnabled' | 'timezone'>>) => Promise<void>
+  updateMe: (patch: Partial<Pick<UserDTO, 'name' | 'title' | 'statusEmoji' | 'statusText' | 'dndEnabled' | 'dndStart' | 'dndEnd' | 'timezone'>>) => Promise<void>
   markNotificationsRead: (ids?: string[]) => Promise<void>
   emitTyping: (channelId: string) => void
 
@@ -362,7 +362,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const data = await api<{ notifications: NotificationDTO[] }>('/api/notifications')
       set({
         notifications: data.notifications,
-        notificationsUnread: data.notifications.filter((n) => !n.readAt).length,
+        // Suppressed (quiet-hours) notifications never count toward the badge
+        notificationsUnread: data.notifications.filter((n) => !n.readAt && !n.suppressed).length,
       })
     } catch {
       // ignore
@@ -539,6 +540,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
   // ── threads ────────────────────────────────────────────────────────────────
   openThread: async (rootId) => {
     set({ activeThreadRootId: rootId, threadLoading: true })
+    // Reading a thread marks its reply notifications read (Threads view badge)
+    void api(`/api/threads/${rootId}/read`, { method: 'POST' })
+      .then(() => get().fetchNotifications())
+      .catch(() => {})
     try {
       const data = await api<{ replies: MessageDTO[]; rootId?: string; following?: boolean; followerCount?: number }>(
         `/api/messages/${rootId}/replies`,
@@ -731,13 +736,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   markNotificationsRead: async (ids) => {
-    set((s) => ({
-      notifications: s.notifications.map((n) =>
+    set((s) => {
+      const patched = s.notifications.map((n) =>
         !ids || ids.includes(n.id) ? { ...n, readAt: n.readAt ?? new Date().toISOString() } : n,
-      ),
-      notificationsUnread: 0,
-    }))
+      )
+      return {
+        notifications: patched,
+        // Optimistic count of what remains unread (suppressed never counted)
+        notificationsUnread: patched.filter((n) => !n.readAt && !n.suppressed).length,
+      }
+    })
     await api('/api/notifications', { method: 'POST', body: ids ? { ids } : {} })
+    // Re-sync the badge with server truth
+    void get().fetchNotifications()
   },
 
   emitTyping: (channelId) => {
@@ -882,7 +893,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
   handleNotification: (notification) => {
     set((s) => ({
       notifications: [notification, ...s.notifications].slice(0, 50),
-      notificationsUnread: s.notificationsUnread + 1,
+      notificationsUnread: notification.suppressed
+        ? s.notificationsUnread
+        : s.notificationsUnread + 1,
     }))
   },
 

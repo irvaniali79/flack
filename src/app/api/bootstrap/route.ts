@@ -20,7 +20,7 @@ export async function GET() {
         include: { user: { include: { agent: { select: { handle: true } } } } },
         orderBy: { createdAt: 'asc' },
       }),
-      db.notification.count({ where: { userId: me.id, readAt: null } }),
+      db.notification.count({ where: { userId: me.id, readAt: null, suppressed: false } }),
     ])
 
     return {

@@ -1,11 +1,12 @@
 'use client'
 // Integrations view — the developer surface for the platform's key
 // differentiators: a Model Context Protocol server and a Slack-compatible
-// Web API. Four sections:
+// Web API. Five sections:
 //   1. MCP endpoint overview + connection snippets (curl / Claude / Cursor)
 //   2. Slack bot API compatibility (zero-code bot migration)
 //   3. API key management (Bearer auth for external clients)
 //   4. Tool playground (call tools live, exactly as an AI client would)
+//   5. Resources (channels as readable MCP resources)
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import {
   Cable,
@@ -13,6 +14,8 @@ import {
   ChevronLeft,
   CircleDot,
   Command,
+  Hash,
+  Layers,
   Loader2,
   Plug,
   Terminal,
@@ -148,6 +151,125 @@ function ToolReference({ tools }: { tools: McpToolInfo[] }) {
   )
 }
 
+/** MCP resources — channel context for AI clients (resources/list + resources/read). */
+function ResourcesSection({ origin }: { origin: string }) {
+  const [resources, setResources] = useState<
+    { uri: string; name: string; description?: string; mimeType?: string }[] | null
+  >(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch('/api/mcp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 9, method: 'resources/list' }),
+      })
+      const data = (await res.json()) as {
+        result?: { resources?: { uri: string; name: string; description?: string; mimeType?: string }[] }
+        error?: { message: string }
+      }
+      if (data.result?.resources) {
+        setResources(data.result.resources)
+        setError(null)
+      } else {
+        setError(data.error?.message ?? 'Could not load resources')
+      }
+    } catch {
+      setError('Could not reach the MCP server')
+    }
+  }, [])
+
+  useEffect(() => {
+    const run = async () => {
+      await load()
+    }
+    void run()
+    const onFocus = () => void run()
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [load])
+
+  const readSnippet = `curl -X POST ${origin}/api/mcp \\
+  -H "Authorization: Bearer acme_YOUR_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"jsonrpc":"2.0","id":1,"method":"resources/read",
+       "params":{"uri":"acme://channels/general"}}'`
+
+  return (
+    <section aria-labelledby="resources-heading" className="space-y-3">
+      <div className="flex items-center gap-2.5">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-600/15 text-teal-600 dark:text-teal-400">
+          <Layers className="h-4 w-4" aria-hidden />
+        </span>
+        <div className="min-w-0">
+          <h2 id="resources-heading" className="text-sm font-bold">
+            Resources
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            Read-only channel context — every channel you can read is exposed as a resource MCP
+            clients can browse and attach.
+          </p>
+        </div>
+        <Badge variant="outline" className="ml-auto h-5 shrink-0 px-1.5 text-[10px]">
+          {resources ? `${resources.length} resources` : '…'}
+        </Badge>
+      </div>
+
+      {error ? (
+        <div className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-xs text-destructive">
+          {error}
+        </div>
+      ) : resources === null ? (
+        <div className="grid gap-2 md:grid-cols-2">
+          <Skeleton className="h-14 rounded-xl" />
+          <Skeleton className="h-14 rounded-xl" />
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="grid gap-2 md:grid-cols-2">
+            {resources.slice(0, 6).map((r) => (
+              <div
+                key={r.uri}
+                className="flex items-start gap-2.5 rounded-xl border border-border p-3 transition-colors duration-150 hover:border-teal-500/40"
+              >
+                <Hash className="mt-0.5 h-3.5 w-3.5 shrink-0 text-teal-600 dark:text-teal-400" aria-hidden />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-xs font-semibold">{r.name}</p>
+                    <code className="ml-auto shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                      {r.mimeType ?? 'application/json'}
+                    </code>
+                  </div>
+                  <code className="mt-1 block truncate font-mono text-[10px] text-teal-700 dark:text-teal-300">
+                    {r.uri}
+                  </code>
+                  {r.description && (
+                    <p className="mt-1 line-clamp-1 text-[11px] text-muted-foreground">{r.description}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+            {resources.length > 6 && (
+              <div className="flex items-center justify-center rounded-xl border border-dashed border-border p-3 text-[11px] text-muted-foreground">
+                +{resources.length - 6} more — list them via resources/list
+              </div>
+            )}
+          </div>
+          <div className="rounded-xl border border-border bg-muted/30 p-3">
+            <p className="mb-2 text-[11px] leading-relaxed text-muted-foreground">
+              Reading a resource returns the channel&apos;s latest 50 messages as JSON — perfect
+              context for “catch me up” style prompts in Claude Desktop or Cursor. Requires the{' '}
+              <code className="rounded bg-muted px-1 font-mono text-[10px]">channels:read</code> scope.
+            </p>
+            <CodeBlock code={readSnippet} language="bash" highlight />
+          </div>
+        </div>
+      )}
+    </section>
+  )
+}
+
 export function IntegrationsView() {
   const setView = useViewStore((s) => s.setView)
   // The browsing origin is a client-only constant — read it via
@@ -275,6 +397,8 @@ export function IntegrationsView() {
                 <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-medium">initialize</Badge>
                 <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-medium">tools/list</Badge>
                 <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-medium">tools/call</Badge>
+                <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-medium">resources/list</Badge>
+                <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-medium">resources/read</Badge>
                 <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-medium">ping</Badge>
                 <Badge variant="outline" className="h-5 px-1.5 text-[10px]">Bearer auth</Badge>
               </div>
@@ -334,7 +458,10 @@ export function IntegrationsView() {
             </div>
           )}
 
-          {/* 5 ─ tool reference */}
+          {/* 5 ─ resources */}
+          <ResourcesSection origin={origin} />
+
+          {/* 6 ─ tool reference */}
           {tools && <ToolReference tools={tools} />}
         </div>
       </div>
