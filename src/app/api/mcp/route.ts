@@ -11,7 +11,7 @@
 //          tools/call · resources/list · prompts/list
 import { db } from '@/lib/db'
 import { getSessionUser } from '@/lib/auth'
-import { requireApiKeyUser } from '@/lib/api-keys'
+import { requireApiKeyUser, TOOL_SCOPE_REQUIREMENTS } from '@/lib/api-keys'
 import { writeAudit } from '@/lib/audit'
 import {
   MCP_TOOLS,
@@ -45,10 +45,10 @@ function err(id: JsonRpcId, code: number, message: string): Response {
   return Response.json({ jsonrpc: '2.0', id, error: { code, message } })
 }
 
-// ─── Actor resolution: Bearer key → user, else session cookie (playground) ──
+// ─── Actor resolution: Bearer key → user + scopes, else session cookie (playground) ──
 
 async function resolveActor(request: Request): Promise<
-  | { ok: true; user: { id: string; orgId: string; name: string }; via: 'api_key' | 'session' }
+  | { ok: true; user: { id: string; orgId: string; name: string }; scopes: Set<string> | null; via: 'api_key' | 'session' }
   | { ok: false; response: Response }
 > {
   const authHeader = request.headers.get('authorization')
@@ -57,7 +57,7 @@ async function resolveActor(request: Request): Promise<
       const keyUser = await requireApiKeyUser(request)
       const user = await db.user.findUnique({ where: { id: keyUser.userId } })
       if (!user) return { ok: false, response: err(null, -32001, 'API key owner no longer exists') }
-      return { ok: true, user: { id: user.id, orgId: user.orgId, name: user.name }, via: 'api_key' }
+      return { ok: true, user: { id: user.id, orgId: user.orgId, name: user.name }, scopes: keyUser.scopes, via: 'api_key' }
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Invalid API key'
       return { ok: false, response: err(null, -32001, message) }
@@ -70,7 +70,8 @@ async function resolveActor(request: Request): Promise<
       response: err(null, -32001, 'Authenticate with an API key (Authorization: Bearer acme_…) or a session cookie'),
     }
   }
-  return { ok: true, user: { id: sessionUser.id, orgId: sessionUser.orgId, name: sessionUser.name }, via: 'session' }
+  // Session (in-app playground) has full access
+  return { ok: true, user: { id: sessionUser.id, orgId: sessionUser.orgId, name: sessionUser.name }, scopes: null, via: 'session' }
 }
 
 // ─── Tool dispatch ───────────────────────────────────────────────────────────
@@ -206,6 +207,18 @@ async function handleMessage(request: Request, msg: JsonRpcRequest): Promise<Res
       const impl = TOOL_IMPLS[name]
       if (!impl) {
         return ok(id, toolErrorContent(`Unknown tool "${name}". Available: ${MCP_TOOLS.map((t) => t.name).join(', ')}`))
+      }
+
+      // Per-key scope enforcement (session playground has full access)
+      const requiredScope = TOOL_SCOPE_REQUIREMENTS[name]
+      if (requiredScope && actor.scopes && !actor.scopes.has(requiredScope)) {
+        return ok(
+          id,
+          toolErrorContent(
+            `This API key is not allowed to call "${name}" — it requires the "${requiredScope}" scope. ` +
+              `The key has: ${[...actor.scopes].join(', ') || 'none'}. Create a new key with the missing scope in the app (Integrations view).`,
+          ),
+        )
       }
 
       // Audit every tool call (API-key calls especially — these are external)

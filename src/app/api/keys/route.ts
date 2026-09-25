@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { handle, HttpError, requireUser } from '@/lib/auth'
-import { generateApiKey, serializeApiKey } from '@/lib/api-keys'
+import { generateApiKey, normalizeRequestedScopes, serializeApiKey } from '@/lib/api-keys'
 import { writeAudit } from '@/lib/audit'
 
 const MAX_KEYS_PER_USER = 10
@@ -23,6 +23,7 @@ export async function GET() {
 
 const createSchema = z.object({
   name: z.string().trim().min(1).max(60),
+  scopes: z.array(z.string()).optional(),
 })
 
 export async function POST(request: Request) {
@@ -39,6 +40,7 @@ export async function POST(request: Request) {
     }
 
     const { key, keyHash, keyPrefix } = generateApiKey()
+    const scopes = normalizeRequestedScopes(parsed.data.scopes)
     const record = await db.apiKey.create({
       data: {
         orgId: me.orgId,
@@ -46,7 +48,7 @@ export async function POST(request: Request) {
         name: parsed.data.name,
         keyHash,
         keyPrefix,
-        scopes: 'mcp',
+        scopes,
       },
     })
 
@@ -55,7 +57,7 @@ export async function POST(request: Request) {
       actorId: me.id,
       action: 'api_key.create',
       target: keyPrefix,
-      meta: { name: parsed.data.name },
+      meta: { name: parsed.data.name, scopes },
     })
 
     return {

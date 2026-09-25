@@ -459,10 +459,22 @@ export async function slackConversationsList(
   return {
     ok: true as const,
     channels: channels.map((c) =>
-      slackChannel(c, {
-        is_member: c.members.length > 0,
-        num_members: c._count.members,
-      }),
+      slackChannel(
+        {
+          id: c.id,
+          name: c.name,
+          kind: c.kind,
+          topic: c.topic,
+          isArchived: c.isArchived,
+          createdAt: c.createdAt,
+          memberCount: c._count.members,
+          isMember: c.members.length > 0,
+        },
+        {
+          is_member: c.members.length > 0,
+          num_members: c._count.members,
+        },
+      ),
     ),
     response_metadata: { next_cursor: '' },
   }

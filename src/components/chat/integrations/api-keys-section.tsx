@@ -1,12 +1,14 @@
 'use client'
-// API key management — list, create (one-time secret reveal), revoke.
+// API key management — list, create (one-time secret reveal + per-key MCP
+// scopes), revoke.
 import { useCallback, useEffect, useState } from 'react'
 import { formatDistanceToNow } from 'date-fns'
-import { KeyRound, Loader2, Plus, ShieldAlert, ShieldCheck, Trash2 } from 'lucide-react'
+import { KeyRound, Loader2, Lock, Plus, ShieldAlert, ShieldCheck, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,9 +19,24 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { cn } from '@/lib/utils'
 import { api } from '@/lib/api'
 import type { ApiKeyDTO } from '@/lib/types'
 import { CopyButton } from './code-block'
+
+const ALL_SCOPES = ['messages:read', 'messages:write', 'channels:read', 'channels:write'] as const
+
+const SCOPE_HINTS: Record<string, string> = {
+  'messages:read': 'read_channel · get_thread · search_messages',
+  'messages:write': 'post_message · add_reaction',
+  'channels:read': 'list_channels',
+  'channels:write': 'create_channel',
+}
+
+function scopeTone(scope: string): string {
+  if (scope.endsWith(':write')) return 'border-fuchsia-500/40 text-fuchsia-600 dark:text-fuchsia-400'
+  return 'border-emerald-500/40 text-emerald-600 dark:text-emerald-400'
+}
 
 function rel(iso: string | null): string {
   if (!iso) return 'never'
@@ -31,6 +48,7 @@ export function ApiKeysSection() {
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
+  const [newScopes, setNewScopes] = useState<string[]>([...ALL_SCOPES])
   const [busyCreate, setBusyCreate] = useState(false)
   const [secret, setSecret] = useState<{ name: string; secret: string } | null>(null)
   const [revoking, setRevoking] = useState<ApiKeyDTO | null>(null)
@@ -61,11 +79,12 @@ export function ApiKeysSection() {
     try {
       const data = await api<{ key: ApiKeyDTO; secret: string }>('/api/keys', {
         method: 'POST',
-        body: { name },
+        body: { name, scopes: newScopes },
       })
       setSecret({ name: data.key.name, secret: data.secret })
       setCreating(false)
       setNewName('')
+      setNewScopes([...ALL_SCOPES])
       void load()
       toast.success(`Key “${data.key.name}” created`)
     } catch (err) {
@@ -88,6 +107,12 @@ export function ApiKeysSection() {
     } finally {
       setBusyRevoke(false)
     }
+  }
+
+  const toggleScope = (scope: string) => {
+    setNewScopes((prev) =>
+      prev.includes(scope) ? prev.filter((s) => s !== scope) : [...prev, scope],
+    )
   }
 
   const activeCount = keys?.filter((k) => !k.revokedAt).length ?? 0
@@ -156,6 +181,7 @@ export function ApiKeysSection() {
         <ul className="overflow-hidden rounded-xl border border-border">
           {keys.map((key, i) => {
             const revoked = !!key.revokedAt
+            const fullAccess = key.scopes.length >= ALL_SCOPES.length
             return (
               <li
                 key={key.id}
@@ -163,7 +189,7 @@ export function ApiKeysSection() {
                   i % 2 === 0 ? 'bg-background' : 'bg-muted/40'
                 } ${revoked ? 'opacity-60' : 'hover:bg-accent/50'}`}
               >
-                <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                   <span className="font-mono text-xs font-semibold">{key.name}</span>
                   <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
                     {key.keyPrefix}…
@@ -176,6 +202,26 @@ export function ApiKeysSection() {
                     <Badge variant="outline" className="h-5 gap-1 border-emerald-500/40 px-1.5 text-[10px] text-emerald-600 dark:text-emerald-400">
                       <ShieldCheck className="h-3 w-3" aria-hidden /> Active
                     </Badge>
+                  )}
+                  {fullAccess ? (
+                    <span
+                      className="flex h-5 items-center gap-1 rounded-full border border-border bg-muted/60 px-1.5 text-[10px] font-medium text-muted-foreground"
+                      title="All MCP tools allowed"
+                    >
+                      <Lock className="h-3 w-3" aria-hidden /> full access
+                    </span>
+                  ) : (
+                    <span className="flex flex-wrap gap-1">
+                      {key.scopes.map((scope) => (
+                        <Badge
+                          key={scope}
+                          variant="outline"
+                          className={cn('h-5 px-1.5 font-mono text-[10px]', scopeTone(scope))}
+                        >
+                          {scope}
+                        </Badge>
+                      ))}
+                    </span>
                   )}
                 </div>
                 <span className="shrink-0 text-[11px] text-muted-foreground" title={`Created ${new Date(key.createdAt).toLocaleString()}`}>
@@ -225,6 +271,64 @@ export function ApiKeysSection() {
                 if (e.key === 'Escape') setCreating(false)
               }}
             />
+
+            {/* MCP scopes */}
+            <div className="mt-3.5">
+              <div className="mb-1.5 flex items-center justify-between">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">MCP scopes</p>
+                {newScopes.length === ALL_SCOPES.length ? (
+                  <button
+                    type="button"
+                    className="text-[10px] font-medium text-muted-foreground underline-offset-2 hover:underline"
+                    onClick={() => setNewScopes(['messages:read', 'channels:read'])}
+                  >
+                    read-only preset
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="text-[10px] font-medium text-muted-foreground underline-offset-2 hover:underline"
+                    onClick={() => setNewScopes([...ALL_SCOPES])}
+                  >
+                    select all
+                  </button>
+                )}
+              </div>
+              <div className="space-y-1 rounded-lg border border-border p-2">
+                {ALL_SCOPES.map((scope) => {
+                  const checked = newScopes.includes(scope)
+                  return (
+                    <label
+                      key={scope}
+                      className={cn(
+                        'flex cursor-pointer items-start gap-2 rounded-md px-1.5 py-1 transition-colors',
+                        checked ? 'bg-muted/60' : 'hover:bg-muted/40',
+                      )}
+                    >
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={() => toggleScope(scope)}
+                        className="mt-0.5"
+                        aria-label={scope}
+                      />
+                      <span className="min-w-0">
+                        <span className="block font-mono text-[11px] font-semibold">{scope}</span>
+                        <span className="block text-[10px] leading-tight text-muted-foreground">{SCOPE_HINTS[scope]}</span>
+                      </span>
+                    </label>
+                  )
+                })}
+                {newScopes.length === 0 && (
+                  <p className="px-1.5 pt-1 text-[10px] text-amber-600 dark:text-amber-400">
+                    No scopes selected — the key will get full access.
+                  </p>
+                )}
+              </div>
+              <p className="mt-1.5 text-[10px] leading-relaxed text-muted-foreground">
+                Scoped keys can only call tools within their scopes — out-of-scope tool calls fail with a clear error.
+              </p>
+            </div>
+
             <div className="mt-4 flex justify-end gap-2">
               <Button size="sm" variant="ghost" className="h-8" onClick={() => setCreating(false)}>
                 Cancel

@@ -50,6 +50,7 @@ import type { MessageDTO } from '@/lib/types'
 import { formatBytes } from '@/lib/api'
 import { formatTime, formatTimeHover } from '@/lib/time'
 import { MarkdownBody } from '@/lib/markdown'
+import { useCustomEmojiStore, isCustomEmojiToken, customEmojiName } from '@/lib/custom-emoji'
 import { UserAvatar } from './avatar'
 import { FileIcon } from './file-icon'
 import { EmojiPicker } from './emoji-picker'
@@ -82,6 +83,28 @@ export const MessageItem = memo(function MessageItem({
   const isSaved = useChatStore((s) => s.savedMessageIds.includes(message.id))
   const toggleSavedMessage = useChatStore((s) => s.toggleSavedMessage)
   const setForwardingMessageId = useChatStore((s) => s.setForwardingMessageId)
+  const customEmoji = useCustomEmojiStore((s) => s.byName)
+
+  // Renders a reaction emoji — a unicode char, or a workspace custom emoji
+  // stored as a ":name:" token with an image lookup fallback.
+  const renderReactionEmoji = (emoji: string) =>
+    isCustomEmojiToken(emoji) ? (
+      (() => {
+        const entry = customEmoji.get(customEmojiName(emoji))
+        return entry ? (
+          <img
+            src={entry.url}
+            alt={emoji}
+            title={emoji}
+            className="h-4 w-4 object-contain [image-rendering:pixelated]"
+          />
+        ) : (
+          <span className="text-sm leading-none">{emoji}</span>
+        )
+      })()
+    ) : (
+      <span className="text-sm leading-none">{emoji}</span>
+    )
 
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [reacting, setReacting] = useState(false)
@@ -318,7 +341,7 @@ export const MessageItem = memo(function MessageItem({
                             : 'border-border bg-muted/50 text-foreground/80 hover:border-border hover:bg-muted',
                         )}
                       >
-                        <span className="text-sm leading-none">{reaction.emoji}</span>
+                        {renderReactionEmoji(reaction.emoji)}
                         <motion.span
                           key={reaction.count}
                           initial={{ scale: 0.5 }}

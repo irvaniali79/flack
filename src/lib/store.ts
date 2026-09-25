@@ -301,6 +301,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       })
       const { me } = get()
       if (me) initSocket(me.id, me.name)
+      // custom emoji power message rendering + the picker — fetch alongside
+      const { useCustomEmojiStore } = await import('./custom-emoji')
+      void useCustomEmojiStore.getState().fetchCustomEmoji()
     } catch {
       set({ me: null, bootstrapping: false })
     }

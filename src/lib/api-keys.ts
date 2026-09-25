@@ -7,6 +7,49 @@ import { HttpError } from './auth'
 
 const KEY_PREFIX = 'acme_'
 
+// ─── MCP scopes ──────────────────────────────────────────────────────────────
+
+export const MCP_SCOPES = ['messages:read', 'messages:write', 'channels:read', 'channels:write'] as const
+export type McpScope = (typeof MCP_SCOPES)[number]
+
+export const SCOPE_DESCRIPTIONS: Record<McpScope, string> = {
+  'messages:read': 'Read channel history, threads and search',
+  'messages:write': 'Post messages and add reactions',
+  'channels:read': 'List channels',
+  'channels:write': 'Create channels',
+}
+
+/** Tool → required scope for the MCP server. */
+export const TOOL_SCOPE_REQUIREMENTS: Record<string, McpScope> = {
+  post_message: 'messages:write',
+  add_reaction: 'messages:write',
+  read_channel: 'messages:read',
+  get_thread: 'messages:read',
+  search_messages: 'messages:read',
+  list_channels: 'channels:read',
+  create_channel: 'channels:write',
+}
+
+/** Normalize a stored scopes string into a scope set. Legacy "mcp" = full access. */
+export function parseScopes(raw: string): Set<string> {
+  const parts = raw.split(',').map((s) => s.trim()).filter(Boolean)
+  if (parts.includes('mcp')) return new Set<string>(MCP_SCOPES)
+  return new Set(parts.filter((p) => (MCP_SCOPES as readonly string[]).includes(p)))
+}
+
+/** Validate + normalize a scopes array from the client. Empty → full access. */
+export function normalizeRequestedScopes(input: unknown): string {
+  if (input === undefined || input === null) return 'mcp'
+  if (!Array.isArray(input)) throw new HttpError(400, 'scopes must be an array of scope strings')
+  const requested = input.map((s) => String(s))
+  const valid = requested.filter((s) => (MCP_SCOPES as readonly string[]).includes(s))
+  if (valid.length !== requested.length) {
+    throw new HttpError(400, `Unknown scope. Valid: ${MCP_SCOPES.join(', ')}`)
+  }
+  if (valid.length === 0) return 'mcp'
+  return valid.join(',')
+}
+
 export function generateApiKey(): { key: string; keyHash: string; keyPrefix: string } {
   const key = KEY_PREFIX + randomBytes(24).toString('hex')
   return {
@@ -25,6 +68,7 @@ export type ApiKeyUser = {
   orgId: string
   keyId: string
   keyPrefix: string
+  scopes: Set<string>
 }
 
 /**
@@ -57,6 +101,7 @@ export async function requireApiKeyUser(request: Request): Promise<ApiKeyUser> {
     orgId: record.orgId,
     keyId: record.id,
     keyPrefix: record.keyPrefix,
+    scopes: parseScopes(record.scopes),
   }
 }
 
@@ -74,7 +119,8 @@ export function serializeApiKey(key: {
     id: key.id,
     name: key.name,
     keyPrefix: key.keyPrefix,
-    scopes: key.scopes.split(',').filter(Boolean),
+    // normalized: legacy "mcp" → the full scope list
+    scopes: [...parseScopes(key.scopes)].sort(),
     lastUsedAt: key.lastUsedAt?.toISOString() ?? null,
     revokedAt: key.revokedAt?.toISOString() ?? null,
     createdAt: key.createdAt.toISOString(),

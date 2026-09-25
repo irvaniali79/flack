@@ -23,6 +23,7 @@ model Org {
   workflows Workflow[]
   auditLogs AuditLog[]
   apiKeys   ApiKey[]
+  customEmojis CustomEmoji[]
 }
 
 // ─── Users & Auth ────────────────────────────────────────────────────────────
@@ -263,6 +264,23 @@ model WorkflowRun {
   error        String?
   startedAt    DateTime  @default(now())
   finishedAt   DateTime?
+}
+
+// ─── Custom emoji (workspace-uploaded, used via :shortcode:) ──────────────────
+model CustomEmoji {
+  id        String   @id @default(cuid())
+  orgId     String
+  org       Org      @relation(fields: [orgId], references: [id])
+  // Shortcode used in messages/reactions, lowercase letters/digits/underscore, no colons
+  name      String
+  // Disk path of the stored image (png/jpg/gif/webp)
+  path      String
+  mimeType  String
+  size      Int
+  createdBy String?
+  createdAt DateTime @default(now())
+
+  @@unique([orgId, name])
 }
 
 // ─── Notifications & Audit ───────────────────────────────────────────────────

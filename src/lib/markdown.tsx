@@ -8,7 +8,9 @@ import { Check, Copy, ExternalLink, Sparkles } from 'lucide-react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { colonToEmoji } from './emoji'
+import { useCustomEmojiStore } from './custom-emoji'
 import type { ChannelDTO, UserDTO } from './types'
+import type { CustomEmojiDTO } from './custom-emoji'
 import { cn } from './utils'
 
 // ─── preprocessing ───────────────────────────────────────────────────────────
@@ -65,8 +67,22 @@ function transformSegment(
   text: string,
   mentionMap: Map<string, UserDTO>,
   channelMap: Map<string, ChannelDTO>,
+  customEmoji: Map<string, CustomEmojiDTO>,
 ): string {
   let out = colonToEmoji(text)
+
+  // workspace custom emoji → inline markdown images (rendered by the img
+  // component below at line-height size). Uses the REAL emoji URL because
+  // react-markdown's default url transform strips custom URL schemes —
+  // plain relative /api/emoji/… URLs pass through untouched.
+  // Runs AFTER colonToEmoji so builtin shortcodes win ties; the admin API
+  // rejects shadowing names anyway.
+  if (customEmoji.size > 0) {
+    out = out.replace(/:([a-zA-Z0-9_+-]{1,40}):/g, (match, code: string) => {
+      const custom = customEmoji.get(code.toLowerCase())
+      return custom ? `![${code}](/api/emoji/${custom.id}/image)` : match
+    })
+  }
 
   // @mentions → markdown links; @channel/@here → special chips
   out = out.replace(/@([a-zA-Z0-9_]+)/g, (match, token: string) => {
@@ -93,11 +109,14 @@ export function preprocessBody(
   body: string,
   users: UserDTO[],
   channels: ChannelDTO[],
+  customEmoji: Map<string, CustomEmojiDTO> = new Map(),
 ): string {
   const mentionMap = buildMentionMap(users)
   const channelMap = buildChannelMap(channels)
   return splitCodeSegments(body)
-    .map((segment) => (segment.code ? segment.value : transformSegment(segment.value, mentionMap, channelMap)))
+    .map((segment) =>
+      segment.code ? segment.value : transformSegment(segment.value, mentionMap, channelMap, customEmoji),
+    )
     .join('')
 }
 
@@ -224,6 +243,25 @@ function useMarkdownContext() {
   return useContext(MarkdownContext)
 }
 
+// ─── custom emoji inline image ───────────────────────────────────────────────
+
+function CustomEmojiImg({ url, fallback, title }: { url: string; fallback: string; title?: string }) {
+  const [failed, setFailed] = useState(false)
+  if (failed) {
+    // emoji was deleted after the message was sent — show the shortcode
+    return <code className="text-[13px]">{fallback}</code>
+  }
+  return (
+    <img
+      src={url}
+      alt={fallback}
+      title={title ?? fallback}
+      onError={() => setFailed(true)}
+      className="mx-0.5 inline-block h-[1.25em] w-[1.25em] align-[-0.25em] object-contain"
+    />
+  )
+}
+
 // ─── main renderer ───────────────────────────────────────────────────────────
 
 export interface MarkdownBodyProps {
@@ -243,7 +281,13 @@ export const MarkdownBody = memo(function MarkdownBody({
   onOpenChannel,
   className,
 }: MarkdownBodyProps) {
-  const processed = useMemo(() => preprocessBody(body, users, channels), [body, users, channels])
+  const customEmoji = useCustomEmojiStore((s) => s.byName)
+  const customList = useCustomEmojiStore((s) => s.emoji)
+  const processed = useMemo(
+    () => preprocessBody(body, users, channels, customEmoji),
+    [body, users, channels, customEmoji],
+  )
+  const emojiById = useMemo(() => new Map(customList.map((e) => [e.id, e])), [customList])
   const contextValue = useMemo<MarkdownContextValue>(
     () => ({ usersById: new Map(users.map((u) => [u.id, u])), onOpenProfile, onOpenChannel }),
     [users, onOpenProfile, onOpenChannel],
@@ -254,6 +298,22 @@ export const MarkdownBody = memo(function MarkdownBody({
       <div className={cn('markdown-body break-words text-[15px] leading-relaxed', className)}>
         <ReactMarkdown
           components={{
+            img: ({ src, alt }) => {
+              // custom emoji inline images — served from /api/emoji/:id/image
+              const raw = String(src ?? '')
+              if (raw.startsWith('/api/emoji/')) {
+                const id = raw.split('/')[3]
+                const entry = emojiById.get(id)
+                return (
+                  <CustomEmojiImg
+                    url={raw}
+                    fallback={alt ? `:${alt}:` : ':?:'}
+                    title={entry ? `:${entry.name}:` : undefined}
+                  />
+                )
+              }
+              return <img src={raw} alt={alt ?? ''} className="max-h-80 rounded-xl" />
+            },
             p: ({ children }) => <p className="mb-0.5 whitespace-pre-wrap last:mb-0">{children}</p>,
             a: ({ href, children }) => {
               const link = href ?? ''

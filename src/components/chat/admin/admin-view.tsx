@@ -64,6 +64,8 @@ import { useViewStore } from '@/lib/view-store'
 import { formatRelativeTime } from '@/lib/time'
 import type { UserDTO } from '@/lib/types'
 import { SlackImportSection } from './slack-import-section'
+import { CutoverSection } from './cutover-section'
+import { CustomEmojiSection } from './custom-emoji-section'
 import { UserAvatar } from '../avatar'
 import { cn } from '@/lib/utils'
 
@@ -251,12 +253,12 @@ export function AdminView() {
 
   const statCards = stats
     ? [
-        { icon: UsersRound, label: 'Users', value: `${stats.users}`, hint: `${stats.activeUsers} active` },
-        { icon: MessageSquare, label: 'Messages today', value: `${stats.messagesToday}`, hint: 'since midnight' },
-        { icon: Hash, label: 'Channels', value: `${stats.channels}`, hint: 'public + private' },
-        { icon: Bot, label: 'Agents', value: `${stats.agents}`, hint: 'AI teammates' },
-        { icon: Zap, label: 'Workflows', value: `${stats.workflows}`, hint: 'automations' },
-        { icon: Database, label: 'Storage', value: formatBytes(stats.storageBytes), hint: `${stats.files} files` },
+        { icon: UsersRound, label: 'Users', value: `${stats.users}`, hint: `${stats.activeUsers} active`, tone: 'text-emerald-600 dark:text-emerald-400' },
+        { icon: MessageSquare, label: 'Messages today', value: `${stats.messagesToday}`, hint: 'since midnight', tone: 'text-sky-600 dark:text-sky-400' },
+        { icon: Hash, label: 'Channels', value: `${stats.channels}`, hint: 'public + private', tone: 'text-amber-600 dark:text-amber-400' },
+        { icon: Bot, label: 'Agents', value: `${stats.agents}`, hint: 'AI teammates', tone: 'text-fuchsia-600 dark:text-fuchsia-400' },
+        { icon: Zap, label: 'Workflows', value: `${stats.workflows}`, hint: 'automations', tone: 'text-rose-600 dark:text-rose-400' },
+        { icon: Database, label: 'Storage', value: formatBytes(stats.storageBytes), hint: `${stats.files} files`, tone: 'text-teal-600 dark:text-teal-400' },
       ]
     : []
 
@@ -326,17 +328,21 @@ export function AdminView() {
           <div className="mx-auto max-w-5xl space-y-5">
             {/* stat cards */}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-              {statCards.map(({ icon: Icon, label, value, hint }) => (
+              {statCards.map(({ icon: Icon, label, value, hint, tone }) => (
                 <div
                   key={label}
-                  className="rounded-xl border border-border bg-card p-4 transition-colors duration-150 hover:border-emerald-500/30"
+                  className="group relative overflow-hidden rounded-xl border border-border bg-card p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-500/30 hover:shadow-sm"
                 >
+                  <div
+                    className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+                    aria-hidden
+                  />
                   <div className="flex items-center gap-1.5 text-muted-foreground">
-                    <Icon className="h-3.5 w-3.5" aria-hidden />
+                    <Icon className={cn('h-3.5 w-3.5 shrink-0', tone)} aria-hidden />
                     <span className="truncate text-xs font-medium">{label}</span>
                   </div>
-                  <p className="mt-1.5 text-xl font-bold tabular-nums">{value}</p>
-                  <p className="truncate text-[11px] text-muted-foreground">{hint}</p>
+                  <p className="mt-1.5 text-xl font-bold leading-none tabular-nums">{value}</p>
+                  <p className="mt-1 truncate text-[11px] text-foreground/55 dark:text-zinc-400">{hint}</p>
                 </div>
               ))}
             </div>
@@ -359,7 +365,7 @@ export function AdminView() {
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                     <XAxis
                       dataKey="date"
-                      tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
+                      tick={{ fontSize: 11, fill: 'var(--foreground)', opacity: 0.55 }}
                       tickLine={false}
                       axisLine={false}
                       minTickGap={20}
@@ -367,7 +373,7 @@ export function AdminView() {
                     />
                     <YAxis
                       allowDecimals={false}
-                      tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
+                      tick={{ fontSize: 11, fill: 'var(--foreground)', opacity: 0.55 }}
                       tickLine={false}
                       axisLine={false}
                     />
@@ -402,6 +408,8 @@ export function AdminView() {
                 <TabsTrigger value="members" className="rounded-lg">Members</TabsTrigger>
                 <TabsTrigger value="channels" className="rounded-lg">Channels</TabsTrigger>
                 <TabsTrigger value="import" className="rounded-lg">Import</TabsTrigger>
+                <TabsTrigger value="cutover" className="rounded-lg">Cutover</TabsTrigger>
+                <TabsTrigger value="emoji" className="rounded-lg">Emoji</TabsTrigger>
                 <TabsTrigger value="audit" className="rounded-lg">Audit log</TabsTrigger>
               </TabsList>
 
@@ -609,6 +617,16 @@ export function AdminView() {
               {/* Slack import */}
               <TabsContent value="import" className="mt-4">
                 <SlackImportSection />
+              </TabsContent>
+
+              {/* Cutover validation (migration phase 3) */}
+              <TabsContent value="cutover" className="mt-4">
+                <CutoverSection />
+              </TabsContent>
+
+              {/* Custom emoji management */}
+              <TabsContent value="emoji" className="mt-4">
+                <CustomEmojiSection />
               </TabsContent>
 
               {/* audit log */}
