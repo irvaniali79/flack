@@ -76,7 +76,7 @@ export function NewDmDialog() {
             <MessageSquarePlus className="h-4 w-4 text-emerald-600" aria-hidden /> New conversation
           </DialogTitle>
           <DialogDescription>
-            Pick one person for a DM, or up to 8 for a group conversation.
+            Message a teammate or AI agent — pick one, or select up to 8 for a group.
           </DialogDescription>
           <div className="relative pt-1">
             <Search className="absolute left-2.5 top-[calc(50%+2px)] h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />

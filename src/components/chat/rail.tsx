@@ -10,7 +10,6 @@ import {
   Plug,
   Settings,
   Shield,
-  Sparkles,
   Sun,
   Zap,
 } from 'lucide-react'
@@ -125,28 +124,14 @@ export function Rail() {
           <TooltipTrigger asChild>
             <button
               type="button"
-              aria-label="New direct message"
+              aria-label="New direct message — people & AI agents"
               onClick={() => setNewDmOpen(true)}
               className={buttonClass(false)}
             >
               <MessageSquare className="h-5 w-5" aria-hidden />
             </button>
           </TooltipTrigger>
-          <TooltipContent side="right">Direct messages</TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              aria-label="AI agents"
-              onClick={() => setNewDmOpen(true)}
-              className={buttonClass(false)}
-            >
-              <Sparkles className="h-5 w-5" aria-hidden />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="right">Chat with an AI agent</TooltipContent>
+          <TooltipContent side="right">Direct messages — people & AI agents</TooltipContent>
         </Tooltip>
 
         <Tooltip>

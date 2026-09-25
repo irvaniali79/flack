@@ -686,3 +686,31 @@ Stage Summary:
 - Source-complete, dependency-free archive: everything needed to run is inside (pre-seeded DB, uploads, git history); only `bun install` restores the 1.2 GB of deps.
 - KEY PORTABILITY NOTE for anyone extracting: .env in the archive still points DATABASE_URL at the sandbox absolute path — SETUP.md step 2 tells them to switch it to `file:../db/custom.db` (Prisma resolves relative to prisma/schema.prisma). package.json "dev" script is `next dev -p 3000 | tee dev.log` — works anywhere with bun/node; no sandbox-specific dependencies in app code.
 - Next-phase candidates unchanged from Round 17 (scheduler-driven connector events, emoji autocomplete, connector slash-commands, multi-channel event routing, admin connector overview, theme quick-switcher).
+
+---
+Task ID: 19
+Agent: main (Z.ai Code)
+Task: User request — "both direct message and chat with ai agent have the same functionality make it one in client side (in sidebar)". Unify the separate DM and Agents sidebar sections into one list.
+
+Work Log:
+- Surveyed current state: sidebar.tsx had TWO sections — "AI agents" (launchers for all agents → openAgentDm) and "Direct messages" (existing DM channels via ChannelRow); rail.tsx had a redundant Sparkles "AI agents" button opening the same NewDm dialog as the MessageSquare "Direct messages" button; new-dm dialog already listed agents with AI badges.
+- DESIGN: one "Direct messages" section = existing conversations (humans, groups, agent DMs — all by activity order) + agent launchers (active agents with no open DM, appended after, slightly muted with hover brighten). Agents WITH a DM render via ChannelRow (single source of truth — no duplicates).
+- sidebar.tsx: (1) ChannelRow now renders the amber AI badge (Sparkles + "AI") when the DM partner other.kind === 'agent' — placed between label and unread badge; (2) new AgentLauncherRow component (avatar + name + AI badge w/ group-hover opacity, title tooltip with @handle + description, onClick → openAgentDm); (3) removed the standalone agents section + agentsOpen state; (4) DM section header now has THREE controls: collapse toggle, Bot "Manage agents" (opens AgentDialog), Plus "New conversation — people & AI agents"; (5) agentLaunchers memo: agents.filter(isActive && no dm channel whose members include agent.userId); (6) empty state only when both lists empty.
+- rail.tsx: removed the duplicate Sparkles "AI agents" button (opened identical dialog); DM button aria-label/tooltip now "Direct messages — people & AI agents"; dropped unused Sparkles import.
+- new-dm.tsx: description copy now "Message a teammate or AI agent — pick one, or select up to 8 for a group."
+- Backend: ZERO changes needed — /api/dms already creates DMs with agent user ids; channel-list.ts already returns agent DMs with members + activity sort; AgentDTO/UserDTO already carry kind + handle.
+
+Verification (agent-browser session dm18 via :81, sarah):
+- Desktop 1920×1080: unified section renders [Aria AI 1 (existing agent DM, AI badge, 1 unread) / Marcus, Priya (group) / Marcus Johnson (human) / CodeReviewer AI (launcher)]; NO separate Agents section; rail shows single DM button.
+- Clicked CodeReviewer launcher → DM created + opened (channel header "CodeReviewer", composer "Message CodeReviewer"), row flips launcher→ChannelRow seamlessly (identical AI badge).
+- Mobile 390×844 drawer: same unified list + workspace nav intact; VLM verification: desktop "single unified DIRECT MESSAGES section, AI badges on Aria+CodeReviewer, no glitches/overlap" (pass), mobile "no overlap/truncation, properly aligned" (pass).
+- 0 page errors, 0 console errors, lint 0 errors, tsc clean for src/ (pre-existing errors only in examples|skills|mini-services), both services :3000/:3003 → 200.
+- Dev.log note: 2 transient "[realtime] emit failed" + one mid-edit "Fast Refresh full reload" during live QA — both artifacts of editing while browser connected; final state clean.
+- QA cleanup: deleted the QA-created Sarah↔CodeReviewer dm channel (0 messages) so the demo state shows BOTH row types: Aria as existing agent DM + CodeReviewer as launcher.
+- Refreshed /home/z/my-project/download/acme-chat-project.zip (source + .git, same exclusion set) so the download includes this change; SETUP.md unchanged (still accurate).
+
+Stage Summary:
+- SHIPPED: unified sidebar DM section — people, group DMs, and AI agents in ONE list (Slack-style). Agent chats are first-class DMs: single mental model, single "+" entry point (agents pre-listed with AI badges), AI badge persists on agent DM rows, agent management stays one click away (Bot icon in section header).
+- Architecture notes: launcher-vs-channel dedup key = dm channel with members containing agent.userId; ChannelRow is the single renderer for ALL existing conversations; AgentLauncherRow only for not-yet-started chats (auto-disappears once DM exists, auto-reappears if DM deleted — derived, no extra state).
+- Login: sarah@acme.test / demo1234 (owner). Browser QA via http://localhost:81. lint 0 errors, 0 console errors, demo state restored.
+- Next-phase candidates (unchanged + carryover): scheduler-driven connector events, emoji autocomplete in composer, connector slash-commands, per-connector multi-channel routing, admin connector overview, accent theme quick-switcher in profile menu.

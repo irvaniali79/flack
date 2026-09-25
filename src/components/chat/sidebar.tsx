@@ -44,7 +44,7 @@ import { cn } from '@/lib/utils'
 import { useChatStore } from '@/lib/store'
 import { api } from '@/lib/api'
 import { useViewStore, type MainView } from '@/lib/view-store'
-import type { ChannelDTO } from '@/lib/types'
+import type { AgentDTO, ChannelDTO } from '@/lib/types'
 import { UserAvatar } from './avatar'
 import { PresenceDot } from './presence-dot'
 import { AgentDialog } from './agents/agent-dialog'
@@ -451,12 +451,38 @@ function ChannelRow({ channel }: { channel: ChannelDTO }) {
         <Hash className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
       )}
       <span className="min-w-0 flex-1 truncate text-sm">{label}</span>
+      {other?.kind === 'agent' && (
+        <span className="flex shrink-0 items-center gap-0.5 rounded bg-amber-500/15 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+          <Sparkles className="h-2.5 w-2.5" aria-hidden /> AI
+        </span>
+      )}
       {channel.isArchived && (
         <span className="rounded bg-muted px-1 py-px text-[9px] font-semibold uppercase text-muted-foreground">
           arch
         </span>
       )}
       <UnreadBadge count={channel.unread} mentions={channel.mentionCount} />
+    </button>
+  )
+}
+
+// ─── agent launcher row (unified DM list — agents with no open conversation) ─
+
+function AgentLauncherRow({ agent, onStart }: { agent: AgentDTO; onStart: (userId: string) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onStart(agent.userId)}
+      title={`Start a chat with ${agent.user.name} (@${agent.handle})${agent.description ? ` — ${agent.description}` : ''}`}
+      className="group flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-foreground/65 transition-all duration-150 hover:translate-x-0.5 hover:bg-accent hover:text-foreground"
+    >
+      <span className="shrink-0">
+        <UserAvatar user={agent.user} size="xs" />
+      </span>
+      <span className="min-w-0 flex-1 truncate text-sm">{agent.user.name}</span>
+      <span className="flex shrink-0 items-center gap-0.5 rounded bg-amber-500/15 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-amber-600 opacity-80 transition-opacity duration-150 group-hover:opacity-100 dark:text-amber-400">
+        <Sparkles className="h-2.5 w-2.5" aria-hidden /> AI
+      </span>
     </button>
   )
 }
@@ -545,7 +571,6 @@ export function Sidebar({
 
   const [channelsOpen, setChannelsOpen] = useState(true)
   const [dmsOpen, setDmsOpen] = useState(true)
-  const [agentsOpen, setAgentsOpen] = useState(true)
   const [agentsDialogOpen, setAgentsDialogOpen] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -556,6 +581,16 @@ export function Sidebar({
   const dmChannels = useMemo(
     () => channels.filter((c) => c.kind === 'dm' || c.kind === 'group_dm'),
     [channels],
+  )
+  // agents without an open conversation appear as launchers inside the unified DM list
+  const agentLaunchers = useMemo(
+    () =>
+      agents.filter(
+        (a) =>
+          a.isActive &&
+          !dmChannels.some((c) => c.kind === 'dm' && c.members?.some((m) => m.id === a.userId)),
+      ),
+    [agents, dmChannels],
   )
 
   // auto-scroll the active channel into view
@@ -770,52 +805,7 @@ export function Sidebar({
           )}
         </section>
 
-        {/* agents section */}
-        <section aria-label="AI agents" className="mt-4 border-t border-border/40 pt-2.5">
-          <div className="flex items-center gap-0.5 px-2 py-1">
-            <button
-              type="button"
-              aria-label={agentsOpen ? 'Collapse agents' : 'Expand agents'}
-              onClick={() => setAgentsOpen((v) => !v)}
-              className="flex flex-1 items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground transition-colors duration-150 hover:text-foreground"
-            >
-              <ChevronDown
-                className={cn('h-3 w-3 transition-transform duration-200 ease-out', !agentsOpen && '-rotate-90')}
-                aria-hidden
-              />
-              Agents
-            </button>
-            <button
-              type="button"
-              aria-label="Manage agents"
-              title="Manage agents"
-              onClick={() => setAgentsDialogOpen(true)}
-              className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground"
-            >
-              <Bot className="h-3.5 w-3.5" aria-hidden />
-            </button>
-          </div>
-          {agentsOpen && (
-            <div className="space-y-0.5">
-              {agents.map((agent) => (
-                <button
-                  key={agent.id}
-                  type="button"
-                  onClick={() => void openAgentDm(agent.userId)}
-                  className="group flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-foreground/75 transition-colors duration-150 hover:bg-accent hover:text-foreground"
-                >
-                  <UserAvatar user={agent.user} size="xs" />
-                  <span className="min-w-0 flex-1 truncate text-sm">{agent.user.name}</span>
-                  <span className="flex items-center gap-0.5 rounded bg-amber-500/15 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">
-                    <Sparkles className="h-2.5 w-2.5" aria-hidden /> AI
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* dm section */}
+        {/* unified dm section — people + AI agents in one list */}
         <section aria-label="Direct messages" className="mt-3">
           <div className="flex items-center gap-0.5 px-2 py-1">
             <button
@@ -832,7 +822,17 @@ export function Sidebar({
             </button>
             <button
               type="button"
+              aria-label="Manage agents"
+              title="Manage AI agents"
+              onClick={() => setAgentsDialogOpen(true)}
+              className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground"
+            >
+              <Bot className="h-3.5 w-3.5" aria-hidden />
+            </button>
+            <button
+              type="button"
               aria-label="New direct message"
+              title="New conversation — people & AI agents"
               onClick={() => setNewDmOpen(true)}
               className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground"
             >
@@ -841,10 +841,14 @@ export function Sidebar({
           </div>
           {dmsOpen && (
             <div className="space-y-0.5">
-              {dmChannels.length === 0 ? (
+              {dmChannels.map((channel) => (
+                <ChannelRow key={channel.id} channel={channel} />
+              ))}
+              {agentLaunchers.map((agent) => (
+                <AgentLauncherRow key={agent.id} agent={agent} onStart={(id) => void openAgentDm(id)} />
+              ))}
+              {dmChannels.length === 0 && agentLaunchers.length === 0 && (
                 <p className="px-2 py-1 text-xs text-muted-foreground">No conversations yet</p>
-              ) : (
-                dmChannels.map((channel) => <ChannelRow key={channel.id} channel={channel} />)
               )}
             </div>
           )}
