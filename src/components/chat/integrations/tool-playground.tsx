@@ -10,10 +10,13 @@ import {
   Hash,
   History,
   Loader2,
+  MessagesSquare,
   Play,
+  Plus,
   RotateCcw,
   Search,
   Send,
+  Smile,
   Terminal,
   XCircle,
 } from 'lucide-react'
@@ -32,6 +35,9 @@ const TOOL_ICONS: Record<string, ToolIcon> = {
   read_channel: Eye,
   search_messages: Search,
   list_channels: Hash,
+  get_thread: MessagesSquare,
+  add_reaction: Smile,
+  create_channel: Plus,
 }
 
 type PlaygroundResult = {
@@ -76,6 +82,23 @@ export function ToolPlayground({ tools }: { tools: McpToolInfo[] }) {
           return JSON.stringify({ query: 'launch', count: 5 }, null, 2)
         case 'list_channels':
           return JSON.stringify({}, null, 2)
+        case 'get_thread':
+          // Seed with the most recent channel message that started a thread
+          return JSON.stringify(
+            {
+              thread_ts: 'paste a message id (try read_channel first — ids are the ts values)',
+            },
+            null,
+            2,
+          )
+        case 'add_reaction':
+          return JSON.stringify({ channel: channelRef, ts: 'paste a message id', emoji: 'tada' }, null, 2)
+        case 'create_channel':
+          return JSON.stringify(
+            { name: 'ai-landing-zone', topic: 'Scratch space for AI-driven experiments', private: false },
+            null,
+            2,
+          )
         default:
           return JSON.stringify({}, null, 2)
       }

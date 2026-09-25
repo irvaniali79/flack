@@ -8,6 +8,8 @@ import { serializeMessage } from '@/lib/serialize'
 import type { MessageFull } from '@/lib/serialize'
 import { maybeInvokeAgents } from '@/lib/agents/runtime'
 import { maybeTriggerWorkflowsOnMessage } from '@/lib/workflows/runtime'
+import { slackEmojiToChar } from '@/lib/slack/compat'
+import { notifyThreadFollowers } from '@/lib/threads'
 
 export type McpTool = {
   name: string
@@ -98,6 +100,70 @@ export const MCP_TOOLS: McpTool[] = [
     inputSchema: {
       type: 'object',
       properties: {},
+    },
+  },
+  {
+    name: 'get_thread',
+    description:
+      'Read one full thread: the root message plus all its replies, oldest first. Use the message id as thread_ts — ' +
+      'it is the "ts" returned by post_message/read_channel/search_messages.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        thread_ts: {
+          type: 'string',
+          description: 'Id of the thread root message.',
+        },
+      },
+      required: ['thread_ts'],
+    },
+  },
+  {
+    name: 'add_reaction',
+    description:
+      'React to a message with an emoji. Accepts the emoji character ("👍") or a Slack-style shortcode ("thumbsup", ":tada:"). ' +
+      'One reaction per user per emoji — reacting again with the same emoji removes it.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        channel: {
+          type: 'string',
+          description: 'Channel the message is in: name ("general"), "#general", or channel id.',
+        },
+        ts: {
+          type: 'string',
+          description: 'Message id to react to.',
+        },
+        emoji: {
+          type: 'string',
+          description: 'Emoji character or shortcode, e.g. "👍", "thumbsup", ":tada:".',
+        },
+      },
+      required: ['channel', 'ts', 'emoji'],
+    },
+  },
+  {
+    name: 'create_channel',
+    description:
+      'Create a new channel. The API key owner becomes the channel creator and first member. ' +
+      'Names must be lowercase letters, numbers and hyphens (e.g. "release-notes").',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: 'Channel name: lowercase letters, digits and hyphens, 1–40 chars.',
+        },
+        topic: {
+          type: 'string',
+          description: 'Optional channel topic / purpose.',
+        },
+        private: {
+          type: 'boolean',
+          description: 'Create a private channel instead of public (default false).',
+        },
+      },
+      required: ['name'],
     },
   },
 ]
@@ -226,6 +292,21 @@ export async function toolPostMessage(
         body: `${actor.name} mentioned you in ${where}`,
       })),
     })
+  }
+
+  // Thread follows: replying via MCP follows the thread too (same as the app)
+  if (parentId) {
+    await db.threadFollow
+      .create({ data: { messageId: parentId, userId: actor.id } })
+      .catch(() => {
+        // Already following
+      })
+    await notifyThreadFollowers({
+      reply: { id: message.id, parentId, channelId: channel.id },
+      actor: { id: actor.id, name: actor.name },
+      channel: { id: channel.id, name: channel.name, kind: channel.kind },
+      alreadyNotifiedUserIds: notifyUserIds,
+    }).catch(() => {})
   }
 
   const dto = serializeMessage(message)
@@ -374,5 +455,155 @@ export async function toolListChannels(actor: { id: string; orgId: string }): Pr
       member_count: c._count.members,
       message_count: c._count.messages,
     })),
+  }
+}
+
+// ─── Tool: get_thread ────────────────────────────────────────────────────────
+
+export async function toolGetThread(
+  actor: { id: string; orgId: string },
+  args: { thread_ts: string },
+): Promise<unknown> {
+  const raw = (args.thread_ts ?? '').trim()
+  if (!raw) throw new ToolError('thread_ts must not be empty')
+
+  // Accept either the root id or any reply id (resolve to the root)
+  const pivot = await db.message.findUnique({
+    where: { id: raw },
+    include: {
+      channel: {
+        include: { members: { where: { userId: actor.id }, select: { id: true } } },
+      },
+    },
+  })
+  if (!pivot || pivot.channel.orgId !== actor.orgId) throw new ToolError(`thread_ts "${raw}" not found`)
+  if (pivot.channel.members.length === 0 && pivot.channel.kind !== 'public') {
+    throw new ToolError(`The thread is in "${pivot.channel.name}" — the key owner is not a member`)
+  }
+
+  const rootId = pivot.parentId ?? pivot.id
+  const [root, replies] = await Promise.all([
+    db.message.findUnique({
+      where: { id: rootId },
+      include: { ...messageInclude, channel: { select: { name: true, kind: true } } },
+    }),
+    db.message.findMany({
+      where: { parentId: rootId, deletedAt: null },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      include: { ...messageInclude, channel: { select: { name: true, kind: true } } },
+    }),
+  ])
+  if (!root) throw new ToolError(`thread_ts "${raw}" not found`)
+
+  const channelLabel =
+    root.channel.kind === 'dm' || root.channel.kind === 'group_dm'
+      ? root.channel.name
+      : `#${root.channel.name}`
+
+  return {
+    ok: true,
+    channel: channelLabel,
+    thread_ts: root.id,
+    reply_count: replies.length,
+    root: compactMessage(root),
+    replies: replies.map((m) => compactMessage(m)),
+  }
+}
+
+// ─── Tool: add_reaction ──────────────────────────────────────────────────────
+
+export async function toolAddReaction(
+  actor: { id: string; orgId: string },
+  args: { channel: string; ts: string; emoji: string },
+): Promise<unknown> {
+  const channel = await resolveChannel(actor.orgId, actor.id, args.channel)
+
+  const emoji = slackEmojiToChar(String(args.emoji ?? ''))
+  if (!emoji) throw new ToolError(`Unknown emoji "${args.emoji}" — try a raw emoji character or a shortcode like "thumbsup"`)
+
+  const message = await db.message.findFirst({
+    where: { id: String(args.ts ?? ''), channelId: channel.id },
+    select: { id: true, deletedAt: true },
+  })
+  if (!message) throw new ToolError(`ts "${args.ts}" not found in #${channel.name}`)
+  if (message.deletedAt) throw new ToolError('That message was deleted')
+
+  const existing = await db.reaction.findUnique({
+    where: { messageId_userId_emoji: { messageId: message.id, userId: actor.id, emoji } },
+  })
+  if (existing) {
+    await db.reaction.delete({ where: { id: existing.id } })
+  } else {
+    await db.reaction.create({ data: { messageId: message.id, userId: actor.id, emoji } })
+  }
+
+  const updated = await db.message.findUnique({
+    where: { id: message.id },
+    include: { ...messageInclude, channel: { select: { name: true, kind: true } } },
+  })
+  if (!updated) throw new ToolError('Message disappeared')
+
+  const dto = serializeMessage(updated as MessageFull)
+  void emitToChannel(updated.channelId, 'reaction:updated', {
+    channelId: updated.channelId,
+    messageId: updated.id,
+    reactions: dto.reactions,
+  }).catch(() => {})
+
+  const mine = dto.reactions.find((r) => r.emoji === emoji)
+  return {
+    ok: true,
+    channel: channel.kind === 'dm' || channel.kind === 'group_dm' ? channel.name : `#${channel.name}`,
+    ts: updated.id,
+    emoji,
+    action: existing ? 'removed' : 'added',
+    reactions: dto.reactions.map((r) => ({ emoji: r.emoji, count: r.count })),
+    note: existing ? undefined : (mine ? `You and ${Math.max(0, mine.count - 1)} other${mine.count === 2 ? '' : 's'} reacted with ${emoji}` : undefined),
+  }
+}
+
+// ─── Tool: create_channel ────────────────────────────────────────────────────
+
+const CHANNEL_NAME_RE = /^[a-z0-9][a-z0-9-]{0,39}$/
+
+export async function toolCreateChannel(
+  actor: { id: string; orgId: string },
+  args: { name: string; topic?: string; private?: boolean },
+): Promise<unknown> {
+  const name = String(args.name ?? '').trim().toLowerCase()
+  if (!CHANNEL_NAME_RE.test(name)) {
+    throw new ToolError('Channel name must be 1–40 chars of lowercase letters, digits and hyphens, starting with a letter or digit')
+  }
+
+  const existing = await db.channel.findFirst({
+    where: { orgId: actor.orgId, slug: name },
+    select: { id: true },
+  })
+  if (existing) throw new ToolError(`A channel called #${name} already exists`)
+
+  const channel = await db.channel.create({
+    data: {
+      orgId: actor.orgId,
+      name,
+      slug: name,
+      topic: args.topic ? String(args.topic).slice(0, 300) : null,
+      kind: args.private ? 'private' : 'public',
+      createdBy: actor.id,
+      members: { create: { userId: actor.id, role: 'owner' } },
+    },
+    include: { _count: { select: { members: true, messages: true } } },
+  })
+
+  void emitToUsers([actor.id], 'channels:refresh', {}).catch(() => {})
+
+  return {
+    ok: true,
+    channel: {
+      id: channel.id,
+      name: `#${channel.name}`,
+      kind: channel.kind,
+      topic: channel.topic ?? undefined,
+      created_by: actor.id,
+    },
   }
 }

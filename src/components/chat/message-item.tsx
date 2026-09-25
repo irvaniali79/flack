@@ -15,6 +15,7 @@ import {
   Pencil,
   Pin,
   PinOff,
+  Send,
   Smile,
   Sparkles,
   Trash2,
@@ -80,6 +81,7 @@ export const MessageItem = memo(function MessageItem({
   const activeThreadRootId = useChatStore((s) => s.activeThreadRootId)
   const isSaved = useChatStore((s) => s.savedMessageIds.includes(message.id))
   const toggleSavedMessage = useChatStore((s) => s.toggleSavedMessage)
+  const setForwardingMessageId = useChatStore((s) => s.setForwardingMessageId)
 
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [reacting, setReacting] = useState(false)
@@ -463,6 +465,14 @@ export const MessageItem = memo(function MessageItem({
             <DropdownMenuItem className="gap-2" onClick={() => void copyLink()}>
               <LinkIcon className="h-4 w-4" aria-hidden /> Copy link
             </DropdownMenuItem>
+            {!deleted && (
+              <DropdownMenuItem
+                className="gap-2"
+                onClick={() => setForwardingMessageId(message.id)}
+              >
+                <Send className="h-4 w-4" aria-hidden /> Forward message
+              </DropdownMenuItem>
+            )}
             {canEdit && (
               <>
                 <DropdownMenuSeparator />

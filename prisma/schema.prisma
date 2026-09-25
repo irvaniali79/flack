@@ -57,6 +57,7 @@ model User {
   files        File[]
   notifications Notification[]
   apiKeys      ApiKey[]
+  threadFollows ThreadFollow[]
 }
 
 model Session {
@@ -148,8 +149,9 @@ model Message {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  reactions Reaction[]
-  files     File[]
+  reactions     Reaction[]
+  files         File[]
+  threadFollows ThreadFollow[] @relation("ThreadFollow")
 }
 
 model Reaction {
@@ -162,6 +164,19 @@ model Reaction {
   createdAt DateTime @default(now())
 
   @@unique([messageId, userId, emoji])
+}
+
+// ─── Thread follows (Slack-style: follow threads you care about) ─────────────
+
+model ThreadFollow {
+  id        String   @id @default(cuid())
+  messageId String
+  message   Message  @relation("ThreadFollow", fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([messageId, userId])
 }
 
 // ─── Files ───────────────────────────────────────────────────────────────────

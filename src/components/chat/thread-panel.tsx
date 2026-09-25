@@ -1,7 +1,8 @@
 'use client'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Hash, Loader2, X } from 'lucide-react'
+import { Bell, BellRing, Hash, Loader2, Users, X } from 'lucide-react'
+import { toast } from 'sonner'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { cn } from '@/lib/utils'
 import { getActiveChannel, useChatStore } from '@/lib/store'
@@ -19,6 +20,10 @@ export function ThreadPanel() {
   const messages = useChatStore((s) => (channel ? s.messagesByChannel[channel.id] : undefined)) ?? []
   const replies = useChatStore((s) => (rootId ? s.threadReplies[rootId] : undefined))
   const loading = useChatStore((s) => s.threadLoading)
+  const following = useChatStore((s) => (rootId ? !!s.threadFollowing[rootId] : false))
+  const followerCount = useChatStore((s) => (rootId ? s.threadFollowerCount[rootId] ?? 0 : 0))
+  const toggleThreadFollow = useChatStore((s) => s.toggleThreadFollow)
+  const [followBusy, setFollowBusy] = useState(false)
 
   // Fetch reply list when a thread opens
   useEffect(() => {
@@ -27,6 +32,25 @@ export function ThreadPanel() {
   }, [rootId])
 
   const root = useMemo(() => messages.find((m) => m.id === rootId) ?? null, [messages, rootId])
+
+  const toggleFollow = async () => {
+    if (!rootId || followBusy) return
+    setFollowBusy(true)
+    const next = !following
+    try {
+      await toggleThreadFollow(rootId, next)
+      toast.success(
+        next
+          ? 'Following this thread — you will be notified about new replies'
+          : 'Unfollowed this thread',
+        { description: next ? undefined : 'Existing notifications stay put.' },
+      )
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not update follow state')
+    } finally {
+      setFollowBusy(false)
+    }
+  }
 
   const participants = useMemo(() => {
     const senders = new Map<string, NonNullable<typeof replies>[number]['sender']>()
@@ -65,6 +89,30 @@ export function ThreadPanel() {
           title="Thread summary"
           loadingLabel="Reading the thread…"
         />
+        <button
+          type="button"
+          onClick={() => void toggleFollow()}
+          aria-pressed={following}
+          aria-label={following ? 'Unfollow this thread' : 'Follow this thread'}
+          title={
+            following
+              ? "You're following — new replies notify you (click to unfollow)"
+              : 'Follow — get notified about new replies'
+          }
+          className={cn(
+            'flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition-all duration-150 active:scale-95',
+            following
+              ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/15 dark:text-emerald-400'
+              : 'border-border text-muted-foreground hover:border-emerald-500/40 hover:bg-accent hover:text-foreground',
+          )}
+        >
+          {following ? (
+            <BellRing className="h-3.5 w-3.5 animate-[bell-ring_0.9s_ease-out_1]" aria-hidden />
+          ) : (
+            <Bell className="h-3.5 w-3.5" aria-hidden />
+          )}
+          {following ? 'Following' : 'Follow'}
+        </button>
         <button
           type="button"
           aria-label="Close thread"
@@ -122,6 +170,15 @@ export function ThreadPanel() {
             <span className="text-[11px] text-muted-foreground">
               {participants.length} {participants.length === 1 ? 'participant' : 'participants'}
             </span>
+            {followerCount > 0 && (
+              <span
+                className="ml-auto flex items-center gap-1 rounded-full bg-muted/70 px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+                title={`${followerCount} ${followerCount === 1 ? 'person is' : 'people are'} following this thread`}
+              >
+                <Users className="h-3 w-3" aria-hidden />
+                {followerCount} following
+              </span>
+            )}
           </div>
         )}
       </div>

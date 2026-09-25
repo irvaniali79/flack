@@ -259,7 +259,7 @@ export function IntegrationsView() {
                   MCP server endpoint
                 </h2>
                 <p className="text-xs text-muted-foreground">
-                  JSON-RPC 2.0 over HTTP · protocol 2025-03-26 · 4 tools
+                  JSON-RPC 2.0 over HTTP · protocol 2025-03-26 · {tools ? tools.length : '…'} tools
                 </p>
               </div>
             </div>

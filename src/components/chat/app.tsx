@@ -23,6 +23,7 @@ import { SettingsDialog } from './dialogs/settings-dialog'
 import { ImageViewer } from './dialogs/image-viewer'
 import { ShortcutsDialog } from './shortcuts-dialog'
 import { SavedView } from './saved-view'
+import { ForwardDialog } from './dialogs/forward-dialog'
 import { WorkflowsView } from './workflows/workflows-view'
 import { AdminView } from './admin/admin-view'
 import { IntegrationsView } from './integrations/integrations-view'
@@ -215,6 +216,7 @@ export function ChatApp() {
       <SettingsDialog />
       <ImageViewer />
       <ShortcutsDialog />
+      <ForwardDialog />
     </div>
   )
 }

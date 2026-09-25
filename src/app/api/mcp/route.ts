@@ -16,6 +16,9 @@ import { writeAudit } from '@/lib/audit'
 import {
   MCP_TOOLS,
   ToolError,
+  toolAddReaction,
+  toolCreateChannel,
+  toolGetThread,
   toolListChannels,
   toolPostMessage,
   toolReadChannel,
@@ -94,6 +97,22 @@ const TOOL_IMPLS: Record<
       count: args.count === undefined ? undefined : Number(args.count),
     }),
   list_channels: (a) => toolListChannels(a),
+  get_thread: (a, args) =>
+    toolGetThread(a, {
+      thread_ts: String(args.thread_ts ?? ''),
+    }),
+  add_reaction: (a, args) =>
+    toolAddReaction(a, {
+      channel: String(args.channel ?? ''),
+      ts: String(args.ts ?? ''),
+      emoji: String(args.emoji ?? ''),
+    }),
+  create_channel: (a, args) =>
+    toolCreateChannel(a, {
+      name: String(args.name ?? ''),
+      topic: args.topic === undefined ? undefined : String(args.topic),
+      private: args.private === undefined ? undefined : Boolean(args.private),
+    }),
 }
 
 function textContent(text: string) {
@@ -158,8 +177,9 @@ async function handleMessage(request: Request, msg: JsonRpcRequest): Promise<Res
         },
         serverInfo: SERVER_INFO,
         instructions:
-          'Acme Chat MCP server. Tools: post_message, read_channel, search_messages, list_channels. ' +
-          'All actions run as ' + actor.user.name + '.',
+          'Acme Chat MCP server. Tools: post_message, read_channel, search_messages, list_channels, ' +
+          'get_thread, add_reaction, create_channel. All actions run as ' +
+          actor.user.name + '.',
       })
 
     case 'notifications/initialized':

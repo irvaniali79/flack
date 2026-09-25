@@ -7,6 +7,7 @@ import { maybeInvokeAgents } from '@/lib/agents/runtime'
 import { maybeTriggerWorkflowsOnMessage } from '@/lib/workflows/runtime'
 import { serializeMessage, serializeNotification } from '@/lib/serialize'
 import type { MessageFull } from '@/lib/serialize'
+import { ensureThreadFollow, notifyThreadFollowers } from '@/lib/threads'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -137,6 +138,13 @@ export async function POST(request: Request, { params }: Params) {
       include: messageInclude,
     })
 
+    // Thread-follow bookkeeping: root authors and repliers auto-follow the
+    // thread so they get notified about future replies (Slack semantics).
+    if (me.kind === 'human') {
+      const followId = message.parentId ?? message.id
+      await ensureThreadFollow(followId, me.id).catch(() => {})
+    }
+
     // Sender has obviously read their own message
     await db.channelMember.updateMany({
       where: { channelId: channel.id, userId: me.id },
@@ -188,6 +196,16 @@ export async function POST(request: Request, { params }: Params) {
           void emitToUsers([userId], 'notification:new', dto).catch(() => {})
         }
       }
+    }
+
+    // Thread followers get a notification for replies (skip already-mentioned users)
+    if (message.parentId) {
+      await notifyThreadFollowers({
+        reply: { id: message.id, parentId: message.parentId, channelId: channel.id },
+        actor: { id: me.id, name: me.name },
+        channel: { id: channel.id, name: channel.name, kind: channel.kind },
+        alreadyNotifiedUserIds: notifyUserIds,
+      }).catch(() => {})
     }
 
     const dto = serializeMessage(message as MessageFull)

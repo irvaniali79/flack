@@ -44,8 +44,34 @@ import { UserAvatar } from './avatar'
 import { PresenceDot } from './presence-dot'
 import { AgentDialog } from './agents/agent-dialog'
 import { formatRelativeTime } from '@/lib/time'
+import { AtSign, CornerDownRight } from 'lucide-react'
 
 // ─── notification bell ───────────────────────────────────────────────────────
+
+const TYPE_STYLES: Record<string, { icon: typeof AtSign; classes: string; label: string }> = {
+  mention: {
+    icon: AtSign,
+    classes: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+    label: 'Mention',
+  },
+  mention_special: {
+    icon: AtSign,
+    classes: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+    label: 'Channel mention',
+  },
+  thread_reply: {
+    icon: CornerDownRight,
+    classes: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+    label: 'Thread reply',
+  },
+  workflow: {
+    icon: Sparkles,
+    classes: 'bg-fuchsia-500/15 text-fuchsia-600 dark:text-fuchsia-400',
+    label: 'Workflow',
+  },
+}
+
+const FALLBACK_STYLE = { classes: 'bg-muted text-muted-foreground', label: 'Notification' }
 
 function NotificationBell() {
   const notifications = useChatStore((s) => s.notifications)
@@ -94,7 +120,10 @@ function NotificationBell() {
               <p className="text-sm text-muted-foreground">You&rsquo;re all caught up</p>
             </div>
           ) : (
-            notifications.map((notification) => (
+            notifications.map((notification) => {
+              const style = TYPE_STYLES[notification.type] ?? FALLBACK_STYLE
+              const Icon = style.icon ?? Bell
+              return (
               <button
                 key={notification.id}
                 type="button"
@@ -110,19 +139,32 @@ function NotificationBell() {
                 )}
               >
                 <span
-                  className="mt-1 h-2 w-2 shrink-0 rounded-full"
-                  style={{ background: notification.readAt ? 'transparent' : '#10b981' }}
+                  className={cn(
+                    'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md',
+                    style.classes,
+                  )}
                   aria-hidden
-                />
-                <span className="min-w-0">
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                </span>
+                <span className="min-w-0 flex-1">
                   <span className="block text-[13px] leading-snug">{notification.body}</span>
-                  <span className="mt-0.5 block text-[11px] text-muted-foreground">
-                    {formatRelativeTime(notification.createdAt)}
-                    {notification.channelName ? ` · ${notification.channelName}` : ''}
+                  <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                    <span className="font-medium">{style.label}</span>
+                    <span aria-hidden>·</span>
+                    <span>{formatRelativeTime(notification.createdAt)}</span>
+                    {notification.channelName ? <span aria-hidden>· {notification.channelName}</span> : null}
                   </span>
                 </span>
+                {!notification.readAt && (
+                  <span
+                    className="mt-2 h-2 w-2 shrink-0 rounded-full bg-emerald-500"
+                    aria-label="Unread"
+                  />
+                )}
               </button>
-            ))
+              )
+            })
           )}
         </div>
       </PopoverContent>

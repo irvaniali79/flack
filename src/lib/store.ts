@@ -105,6 +105,11 @@ interface ChatState {
   unreadDividerByChannel: Record<string, string | null>
   threadReplies: Record<string, MessageDTO[]>
   threadLoading: boolean
+  /** Whether the viewer follows each open thread root (rootId → following). */
+  threadFollowing: Record<string, boolean>
+  /** Follower count per thread root. */
+  threadFollowerCount: Record<string, number>
+  toggleThreadFollow: (rootId: string, follow: boolean) => Promise<void>
   presence: Record<string, boolean>
   typing: Record<string, Record<string, TypingEntry>>
   notifications: NotificationDTO[]
@@ -137,6 +142,9 @@ interface ChatState {
   drawerOpen: boolean
   editingMessageId: string | null
   jumpToMessageId: string | null
+  /** Message being forwarded (Forward dialog open when set). */
+  forwardingMessageId: string | null
+  setForwardingMessageId: (id: string | null) => void
 
   // ── actions ───────────────────────────────────────────────────────────────
   fetchBootstrap: () => Promise<void>
@@ -249,6 +257,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   unreadDividerByChannel: {},
   threadReplies: {},
   threadLoading: false,
+  threadFollowing: {},
+  threadFollowerCount: {},
   presence: {},
   typing: {},
   notifications: [],
@@ -273,6 +283,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   drawerOpen: false,
   editingMessageId: null,
   jumpToMessageId: null,
+  forwardingMessageId: null,
 
   // ── session ────────────────────────────────────────────────────────────────
   fetchBootstrap: async () => {
@@ -447,6 +458,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
             [channelId]: bumpReplyCount(s.messagesByChannel[channelId] ?? [], message.parentId, 1),
           },
           channels: touchChannel(s.channels, channelId, message),
+          // Replying auto-follows the thread (server does this too — mirror locally)
+          threadFollowing: { ...s.threadFollowing, [message.parentId]: true },
         }
       }
       const list = s.messagesByChannel[channelId] ?? []
@@ -524,11 +537,41 @@ export const useChatStore = create<ChatState>((set, get) => ({
   openThread: async (rootId) => {
     set({ activeThreadRootId: rootId, threadLoading: true })
     try {
-      const data = await api<{ replies: MessageDTO[] }>(`/api/messages/${rootId}/replies`)
-      set((s) => ({ threadReplies: { ...s.threadReplies, [rootId]: data.replies }, threadLoading: false }))
+      const data = await api<{ replies: MessageDTO[]; rootId?: string; following?: boolean; followerCount?: number }>(
+        `/api/messages/${rootId}/replies`,
+      )
+      const effectiveRoot = data.rootId ?? rootId
+      set((s) => ({
+        threadReplies: { ...s.threadReplies, [rootId]: data.replies },
+        ...(data.following === undefined
+          ? {}
+          : {
+              threadFollowing: { ...s.threadFollowing, [effectiveRoot]: data.following },
+              threadFollowerCount: {
+                ...s.threadFollowerCount,
+                [effectiveRoot]: data.followerCount ?? 0,
+              },
+            }),
+        threadLoading: false,
+      }))
     } catch {
       set({ threadLoading: false })
     }
+  },
+
+  toggleThreadFollow: async (rootId, follow) => {
+    const data = await api<{ following: boolean; followerCount: number; rootId?: string }>(
+      `/api/messages/${rootId}/follow`,
+      { method: 'POST', body: { follow } },
+    )
+    const effectiveRoot = data.rootId ?? rootId
+    set((s) => ({
+      threadFollowing: { ...s.threadFollowing, [effectiveRoot]: data.following },
+      threadFollowerCount: {
+        ...s.threadFollowerCount,
+        [effectiveRoot]: data.followerCount,
+      },
+    }))
   },
 
   closeThread: () => set({ activeThreadRootId: null, editingMessageId: null }),
@@ -856,6 +899,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   setDrawerOpen: (open) => set({ drawerOpen: open }),
   setEditingMessageId: (id) => set({ editingMessageId: id }),
   setJumpToMessageId: (id) => set({ jumpToMessageId: id }),
+  setForwardingMessageId: (id) => set({ forwardingMessageId: id }),
 }))
 
 // ── selectors (plain functions over getState) ────────────────────────────────

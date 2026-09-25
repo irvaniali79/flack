@@ -1,0 +1,880 @@
+     1→'use client'
+     2→// Central zustand store: session, data, realtime state, drafts + UI flags.
+     3→import { create } from 'zustand'
+     4→import { api } from './api'
+     5→import type {
+     6→  AgentDTO,
+     7→  ChannelDTO,
+     8→  MessageDTO,
+     9→  NotificationDTO,
+    10→  ReactionDTO,
+    11→  UserDTO,
+    12→} from './types'
+    13→import {
+    14→  disconnectSocket,
+    15→  initSocket,
+    16→  sendTyping,
+    17→  socketJoinChannel,
+    18→  socketLeaveChannel,
+    19→} from './socket'
+    20→
+    21→const DRAFT_KEY = 'acme-drafts'
+    22→const SAVED_KEY = 'acme-saved-messages'
+    23→
+    24→function loadDrafts(): Record<string, string> {
+    25→  try {
+    26→    const raw = localStorage.getItem(DRAFT_KEY)
+    27→    const parsed = raw ? JSON.parse(raw) : {}
+    28→    return typeof parsed === 'object' && parsed ? parsed : {}
+    29→  } catch {
+    30→    return {}
+    31→  }
+    32→}
+    33→
+    34→function saveDrafts(drafts: Record<string, string>) {
+    35→  try {
+    36→    localStorage.setItem(DRAFT_KEY, JSON.stringify(drafts))
+    37→  } catch {
+    38→    // ignore
+    39→  }
+    40→}
+    41→
+    42→// ── saved messages (bookmarks) — ids persisted in localStorage ────────────────
+    43→
+    44→function loadSavedIds(): string[] {
+    45→  try {
+    46→    const raw = localStorage.getItem(SAVED_KEY)
+    47→    const parsed = raw ? JSON.parse(raw) : []
+    48→    return Array.isArray(parsed) ? parsed.filter((id) => typeof id === 'string') : []
+    49→  } catch {
+    50→    return []
+    51→  }
+    52→}
+    53→
+    54→function saveIds(ids: string[]) {
+    55→  try {
+    56→    localStorage.setItem(SAVED_KEY, JSON.stringify(ids))
+    57→  } catch {
+    58→    // ignore
+    59→  }
+    60→}
+    61→
+    62→/** Find a message DTO among the currently loaded channels/threads. */
+    63→function findLoadedMessage(state: ChatState, id: string): MessageDTO | null {
+    64→  for (const list of Object.values(state.messagesByChannel)) {
+    65→    const hit = (list ?? []).find((m) => m.id === id)
+    66→    if (hit) return hit
+    67→  }
+    68→  for (const replies of Object.values(state.threadReplies)) {
+    69→    const hit = (replies ?? []).find((m) => m.id === id)
+    70→    if (hit) return hit
+    71→  }
+    72→  return null
+    73→}
+    74→
+    75→let savedRefreshInFlight = false
+    76→
+    77→export interface BootstrapResponse {
+    78→  me: UserDTO
+    79→  org: { name: string }
+    80→  users: UserDTO[]
+    81→  channels: ChannelDTO[]
+    82→  agents: AgentDTO[]
+    83→  notificationsUnread: number
+    84→}
+    85→
+    86→export interface TypingEntry {
+    87→  name: string
+    88→  at: number
+    89→  kind?: string
+    90→}
+    91→
+    92→interface ChatState {
+    93→  // ── data ──────────────────────────────────────────────────────────────────
+    94→  me: UserDTO | null
+    95→  orgName: string
+    96→  users: UserDTO[]
+    97→  channels: ChannelDTO[]
+    98→  agents: AgentDTO[]
+    99→  activeChannelId: string | null
+   100→  activeThreadRootId: string | null
+   101→  messagesByChannel: Record<string, MessageDTO[]>
+   102→  messagesLoading: Record<string, boolean>
+   103→  hasMoreByChannel: Record<string, boolean>
+   104→  loadingOlder: Record<string, boolean>
+   105→  unreadDividerByChannel: Record<string, string | null>
+   106→  threadReplies: Record<string, MessageDTO[]>
+   107→  threadLoading: boolean
+   108→  presence: Record<string, boolean>
+   109→  typing: Record<string, Record<string, TypingEntry>>
+   110→  notifications: NotificationDTO[]
+   111→  notificationsUnread: number
+   112→  connected: boolean
+   113→  bootstrapping: boolean
+   114→
+   115→  // ── drafts (persisted) ────────────────────────────────────────────────────
+   116→  drafts: Record<string, string>
+   117→
+   118→  // ── saved messages (bookmarks, ids persisted) ─────────────────────────────
+   119→  savedMessageIds: string[]
+   120→  /** Cache of saved message DTOs for messages not currently loaded. */
+   121→  savedExtras: Record<string, MessageDTO>
+   122→  toggleSavedMessage: (id: string) => void
+   123→  isSaved: (id: string) => boolean
+   124→  /** Re-fetch saved messages that aren't in any loaded channel (lazy, fresh). */
+   125→  refreshSavedExtras: () => Promise<void>
+   126→
+   127→  // ── ui state ──────────────────────────────────────────────────────────────
+   128→  searchOpen: boolean
+   129→  searchSeed: string
+   130→  shortcutsOpen: boolean
+   131→  createChannelOpen: boolean
+   132→  browseChannelsOpen: boolean
+   133→  newDmOpen: boolean
+   134→  settingsOpen: boolean
+   135→  profileUserId: string | null
+   136→  imageViewer: { url: string; name: string; size?: number } | null
+   137→  drawerOpen: boolean
+   138→  editingMessageId: string | null
+   139→  jumpToMessageId: string | null
+   140→
+   141→  // ── actions ───────────────────────────────────────────────────────────────
+   142→  fetchBootstrap: () => Promise<void>
+   143→  login: (email: string, password: string) => Promise<void>
+   144→  register: (email: string, name: string, password: string) => Promise<void>
+   145→  logout: () => Promise<void>
+   146→  fetchChannels: () => Promise<void>
+   147→  fetchNotifications: () => Promise<void>
+   148→  openChannel: (channelId: string) => Promise<void>
+   149→  closeChannel: () => void
+   150→  fetchMessages: (channelId: string) => Promise<void>
+   151→  loadOlder: (channelId: string) => Promise<void>
+   152→  sendMessage: (body: string, fileIds?: string[], parentId?: string) => Promise<void>
+   153→  editMessage: (messageId: string, body: string) => Promise<void>
+   154→  deleteMessage: (messageId: string) => Promise<void>
+   155→  toggleReaction: (messageId: string, emoji: string) => Promise<void>
+   156→  togglePin: (messageId: string, pinned: boolean) => Promise<void>
+   157→  openThread: (rootId: string) => Promise<void>
+   158→  closeThread: () => void
+   159→  createChannel: (
+   160→    name: string,
+   161→    topic: string,
+   162→    kind: 'public' | 'private',
+   163→    memberIds: string[],
+   164→  ) => Promise<string | null>
+   165→  createDm: (userIds: string[]) => Promise<string | null>
+   166→  joinChannel: (channelId: string) => Promise<void>
+   167→  leaveChannel: (channelId: string) => Promise<void>
+   168→  addChannelMember: (channelId: string, userId: string) => Promise<void>
+   169→  updateChannel: (
+   170→    channelId: string,
+   171→    patch: { name?: string; topic?: string | null; isArchived?: boolean },
+   172→  ) => Promise<void>
+   173→  setNotifyPrefs: (channelId: string, patch: { notifyLevel?: ChannelDTO['notifyLevel']; muted?: boolean }) => Promise<void>
+   174→  markChannelRead: (channelId: string, messageId: string | null) => void
+   175→  setDraft: (channelId: string, text: string) => void
+   176→  updateMe: (patch: Partial<Pick<UserDTO, 'name' | 'title' | 'statusEmoji' | 'statusText' | 'dndEnabled' | 'timezone'>>) => Promise<void>
+   177→  markNotificationsRead: (ids?: string[]) => Promise<void>
+   178→  emitTyping: (channelId: string) => void
+   179→
+   180→  // ── realtime handlers (called from socket.ts) ─────────────────────────────
+   181→  setConnected: (connected: boolean) => void
+   182→  setPresenceList: (userIds: string[]) => void
+   183→  setPresence: (userId: string, online: boolean) => void
+   184→  handleNewMessage: (message: MessageDTO) => void
+   185→  handleMessageUpdated: (message: MessageDTO) => void
+   186→  handleMessageDeleted: (id: string, channelId: string) => void
+   187→  handleReactionUpdated: (channelId: string, messageId: string, reactions: ReactionDTO[]) => void
+   188→  handleTyping: (channelId: string, userId: string, name: string, kind?: string, stop?: boolean) => void
+   189→  handleNotification: (notification: NotificationDTO) => void
+   190→  handleChannelsRefresh: () => Promise<void>
+   191→
+   192→  // ── ui setters ────────────────────────────────────────────────────────────
+   193→  setSearchOpen: (open: boolean, seed?: string) => void
+   194→  setShortcutsOpen: (open: boolean) => void
+   195→  setCreateChannelOpen: (open: boolean) => void
+   196→  setBrowseChannelsOpen: (open: boolean) => void
+   197→  setNewDmOpen: (open: boolean) => void
+   198→  setSettingsOpen: (open: boolean) => void
+   199→  setProfileUserId: (userId: string | null) => void
+   200→  setImageViewer: (viewer: { url: string; name: string; size?: number } | null) => void
+   201→  setDrawerOpen: (open: boolean) => void
+   202→  setEditingMessageId: (id: string | null) => void
+   203→  setJumpToMessageId: (id: string | null) => void
+   204→}
+   205→
+   206→function replaceMessage(list: MessageDTO[], messageId: string, next: MessageDTO): MessageDTO[] {
+   207→  const idx = list.findIndex((m) => m.id === messageId)
+   208→  if (idx === -1) return list
+   209→  const copy = [...list]
+   210→  copy[idx] = next
+   211→  return copy
+   212→}
+   213→
+   214→function bumpReplyCount(list: MessageDTO[], rootId: string, delta: number): MessageDTO[] {
+   215→  const idx = list.findIndex((m) => m.id === rootId)
+   216→  if (idx === -1) return list
+   217→  const copy = [...list]
+   218→  copy[idx] = { ...copy[idx], replyCount: Math.max(0, copy[idx].replyCount + delta) }
+   219→  return copy
+   220→}
+   221→
+   222→function touchChannel(channels: ChannelDTO[], channelId: string, message: MessageDTO): ChannelDTO[] {
+   223→  return channels.map((c) =>
+   224→    c.id === channelId
+   225→      ? {
+   226→          ...c,
+   227→          lastMessage: {
+   228→            body: message.body,
+   229→            createdAt: message.createdAt,
+   230→            senderName: message.sender?.name ?? null,
+   231→          },
+   232→        }
+   233→      : c,
+   234→  )
+   235→}
+   236→
+   237→export const useChatStore = create<ChatState>((set, get) => ({
+   238→  me: null,
+   239→  orgName: 'Acme',
+   240→  users: [],
+   241→  channels: [],
+   242→  agents: [],
+   243→  activeChannelId: null,
+   244→  activeThreadRootId: null,
+   245→  messagesByChannel: {},
+   246→  messagesLoading: {},
+   247→  hasMoreByChannel: {},
+   248→  loadingOlder: {},
+   249→  unreadDividerByChannel: {},
+   250→  threadReplies: {},
+   251→  threadLoading: false,
+   252→  presence: {},
+   253→  typing: {},
+   254→  notifications: [],
+   255→  notificationsUnread: 0,
+   256→  connected: false,
+   257→  bootstrapping: false,
+   258→
+   259→  drafts: typeof window !== 'undefined' ? loadDrafts() : {},
+   260→
+   261→  savedMessageIds: typeof window !== 'undefined' ? loadSavedIds() : [],
+   262→  savedExtras: {},
+   263→
+   264→  searchOpen: false,
+   265→  searchSeed: '',
+   266→  shortcutsOpen: false,
+   267→  createChannelOpen: false,
+   268→  browseChannelsOpen: false,
+   269→  newDmOpen: false,
+   270→  settingsOpen: false,
+   271→  profileUserId: null,
+   272→  imageViewer: null,
+   273→  drawerOpen: false,
+   274→  editingMessageId: null,
+   275→  jumpToMessageId: null,
+   276→
+   277→  // ── session ────────────────────────────────────────────────────────────────
+   278→  fetchBootstrap: async () => {
+   279→    set({ bootstrapping: true })
+   280→    try {
+   281→      const data = await api<BootstrapResponse>('/api/bootstrap')
+   282→      set({
+   283→        me: data.me,
+   284→        orgName: data.org.name,
+   285→        users: data.users,
+   286→        channels: data.channels,
+   287→        agents: data.agents,
+   288→        notificationsUnread: data.notificationsUnread,
+   289→        bootstrapping: false,
+   290→      })
+   291→      const { me } = get()
+   292→      if (me) initSocket(me.id, me.name)
+   293→    } catch {
+   294→      set({ me: null, bootstrapping: false })
+   295→    }
+   296→  },
+   297→
+   298→  login: async (email, password) => {
+   299→    await api<{ user: UserDTO }>('/api/auth/login', { method: 'POST', body: { email, password } })
+   300→    await get().fetchBootstrap()
+   301→  },
+   302→
+   303→  register: async (email, name, password) => {
+   304→    await api<{ user: UserDTO }>('/api/auth/register', { method: 'POST', body: { email, name, password } })
+   305→    await get().fetchBootstrap()
+   306→  },
+   307→
+   308→  logout: async () => {
+   309→    try {
+   310→      await api('/api/auth/logout', { method: 'POST' })
+   311→    } catch {
+   312→      // best-effort
+   313→    }
+   314→    disconnectSocket()
+   315→    set({
+   316→      me: null,
+   317→      users: [],
+   318→      channels: [],
+   319→      agents: [],
+   320→      activeChannelId: null,
+   321→      activeThreadRootId: null,
+   322→      messagesByChannel: {},
+   323→      threadReplies: {},
+   324→      presence: {},
+   325→      typing: {},
+   326→      notifications: [],
+   327→      notificationsUnread: 0,
+   328→      drawerOpen: false,
+   329→      searchOpen: false,
+   330→      profileUserId: null,
+   331→      settingsOpen: false,
+   332→    })
+   333→  },
+   334→
+   335→  fetchChannels: async () => {
+   336→    const { me } = get()
+   337→    if (!me) return
+   338→    try {
+   339→      const data = await api<{ channels: ChannelDTO[] }>('/api/channels')
+   340→      set({ channels: data.channels })
+   341→    } catch {
+   342→      // ignore — keep stale list
+   343→    }
+   344→  },
+   345→
+   346→  fetchNotifications: async () => {
+   347→    try {
+   348→      const data = await api<{ notifications: NotificationDTO[] }>('/api/notifications')
+   349→      set({
+   350→        notifications: data.notifications,
+   351→        notificationsUnread: data.notifications.filter((n) => !n.readAt).length,
+   352→      })
+   353→    } catch {
+   354→      // ignore
+   355→    }
+   356→  },
+   357→
+   358→  // ── channels ───────────────────────────────────────────────────────────────
+   359→  openChannel: async (channelId) => {
+   360→    const prev = get().activeChannelId
+   361→    if (prev && prev !== channelId) socketLeaveChannel(prev)
+   362→    set({ activeChannelId: channelId, activeThreadRootId: null, drawerOpen: false, editingMessageId: null })
+   363→    socketJoinChannel(channelId)
+   364→
+   365→    const channel = get().channels.find((c) => c.id === channelId)
+   366→    const unread = channel?.unread ?? 0
+   367→    await get().fetchMessages(channelId)
+   368→
+   369→    // Track the unread divider position before marking read
+   370→    const messages = get().messagesByChannel[channelId] ?? []
+   371→    let divider: string | null = null
+   372→    if (unread > 0 && messages.length > 0) {
+   373→      const idx = Math.max(0, messages.length - unread)
+   374→      divider = messages[idx]?.id ?? null
+   375→    }
+   376→    const last = messages[messages.length - 1]
+   377→    if (last) get().markChannelRead(channelId, last.id)
+   378→    set((s) => ({
+   379→      unreadDividerByChannel: { ...s.unreadDividerByChannel, [channelId]: divider },
+   380→    }))
+   381→  },
+   382→
+   383→  closeChannel: () => {
+   384→    const prev = get().activeChannelId
+   385→    if (prev) socketLeaveChannel(prev)
+   386→    set({ activeChannelId: null, activeThreadRootId: null })
+   387→  },
+   388→
+   389→  fetchMessages: async (channelId) => {
+   390→    if (get().messagesLoading[channelId]) return
+   391→    set((s) => ({ messagesLoading: { ...s.messagesLoading, [channelId]: true } }))
+   392→    try {
+   393→      const data = await api<{ messages: MessageDTO[]; hasMore: boolean }>(
+   394→        `/api/channels/${channelId}/messages?limit=50`,
+   395→      )
+   396→      set((s) => ({
+   397→        messagesByChannel: { ...s.messagesByChannel, [channelId]: data.messages },
+   398→        hasMoreByChannel: { ...s.hasMoreByChannel, [channelId]: data.hasMore },
+   399→        messagesLoading: { ...s.messagesLoading, [channelId]: false },
+   400→      }))
+   401→    } catch {
+   402→      set((s) => ({ messagesLoading: { ...s.messagesLoading, [channelId]: false } }))
+   403→    }
+   404→  },
+   405→
+   406→  loadOlder: async (channelId) => {
+   407→    const { messagesByChannel, hasMoreByChannel, loadingOlder } = get()
+   408→    if (!hasMoreByChannel[channelId] || loadingOlder[channelId]) return
+   409→    const messages = messagesByChannel[channelId] ?? []
+   410→    const oldest = messages[0]
+   411→    if (!oldest) return
+   412→    set((s) => ({ loadingOlder: { ...s.loadingOlder, [channelId]: true } }))
+   413→    try {
+   414→      const data = await api<{ messages: MessageDTO[]; hasMore: boolean }>(
+   415→        `/api/channels/${channelId}/messages?limit=50&beforeId=${oldest.id}`,
+   416→      )
+   417→      set((s) => ({
+   418→        messagesByChannel: {
+   419→          ...s.messagesByChannel,
+   420→          [channelId]: [...data.messages, ...(s.messagesByChannel[channelId] ?? [])],
+   421→        },
+   422→        hasMoreByChannel: { ...s.hasMoreByChannel, [channelId]: data.hasMore },
+   423→        loadingOlder: { ...s.loadingOlder, [channelId]: false },
+   424→      }))
+   425→    } catch {
+   426→      set((s) => ({ loadingOlder: { ...s.loadingOlder, [channelId]: false } }))
+   427→    }
+   428→  },
+   429→
+   430→  // ── messages ───────────────────────────────────────────────────────────────
+   431→  sendMessage: async (body, fileIds, parentId) => {
+   432→    const channelId = get().activeChannelId
+   433→    if (!channelId) return
+   434→    const data = await api<{ message: MessageDTO }>(`/api/channels/${channelId}/messages`, {
+   435→      method: 'POST',
+   436→      body: { body, fileIds, parentId },
+   437→    })
+   438→    const message = data.message
+   439→    set((s) => {
+   440→      if (message.parentId) {
+   441→        const replies = s.threadReplies[message.parentId] ?? []
+   442→        if (replies.some((r) => r.id === message.id)) return {}
+   443→        return {
+   444→          threadReplies: { ...s.threadReplies, [message.parentId]: [...replies, message] },
+   445→          messagesByChannel: {
+   446→            ...s.messagesByChannel,
+   447→            [channelId]: bumpReplyCount(s.messagesByChannel[channelId] ?? [], message.parentId, 1),
+   448→          },
+   449→          channels: touchChannel(s.channels, channelId, message),
+   450→        }
+   451→      }
+   452→      const list = s.messagesByChannel[channelId] ?? []
+   453→      if (list.some((m) => m.id === message.id)) return {}
+   454→      return {
+   455→        messagesByChannel: { ...s.messagesByChannel, [channelId]: [...list, message] },
+   456→        channels: touchChannel(s.channels, channelId, message),
+   457→      }
+   458→    })
+   459→    // Clear typing indicator for me
+   460→    get().handleTyping(channelId, message.sender?.id ?? 'me', '', undefined, true)
+   461→  },
+   462→
+   463→  editMessage: async (messageId, body) => {
+   464→    const data = await api<{ message: MessageDTO }>(`/api/messages/${messageId}`, {
+   465→      method: 'PATCH',
+   466→      body: { body },
+   467→    })
+   468→    get().handleMessageUpdated(data.message)
+   469→    set({ editingMessageId: null })
+   470→  },
+   471→
+   472→  deleteMessage: async (messageId) => {
+   473→    await api(`/api/messages/${messageId}`, { method: 'DELETE' })
+   474→    const { messagesByChannel } = get()
+   475→    const entry = Object.entries(messagesByChannel).find(([, list]) =>
+   476→      list.some((m) => m.id === messageId),
+   477→    )
+   478→    const channelId = entry?.[0]
+   479→    if (channelId) get().handleMessageDeleted(messageId, channelId)
+   480→    // also drop from thread replies if present
+   481→    set((s) => {
+   482→      const nextThreadReplies: Record<string, MessageDTO[]> = {}
+   483→      for (const [rootId, replies] of Object.entries(s.threadReplies)) {
+   484→        nextThreadReplies[rootId] = replies.map((r) =>
+   485→          r.id === messageId ? { ...r, deletedAt: new Date().toISOString(), isPinned: false } : r,
+   486→        )
+   487→      }
+   488→      return { threadReplies: nextThreadReplies }
+   489→    })
+   490→  },
+   491→
+   492→  toggleReaction: async (messageId, emoji) => {
+   493→    const data = await api<{ reactions: ReactionDTO[] }>(`/api/messages/${messageId}/reactions`, {
+   494→      method: 'POST',
+   495→      body: { emoji },
+   496→    })
+   497→    const { messagesByChannel, threadReplies } = get()
+   498→    for (const [channelId] of Object.entries(messagesByChannel)) {
+   499→      if (messagesByChannel[channelId]?.some((m) => m.id === messageId)) {
+   500→        get().handleReactionUpdated(channelId, messageId, data.reactions)
+   501→      }
+   502→    }
+   503→    for (const [rootId, replies] of Object.entries(threadReplies)) {
+   504→      if (replies.some((m) => m.id === messageId)) {
+   505→        set((s) => ({
+   506→          threadReplies: {
+   507→            ...s.threadReplies,
+   508→            [rootId]: replies.map((r) => (r.id === messageId ? { ...r, reactions: data.reactions } : r)),
+   509→          },
+   510→        }))
+   511→      }
+   512→    }
+   513→  },
+   514→
+   515→  togglePin: async (messageId, pinned) => {
+   516→    const data = await api<{ message: MessageDTO }>(`/api/messages/${messageId}/pin`, {
+   517→      method: 'POST',
+   518→      body: { pinned },
+   519→    })
+   520→    get().handleMessageUpdated(data.message)
+   521→  },
+   522→
+   523→  // ── threads ────────────────────────────────────────────────────────────────
+   524→  openThread: async (rootId) => {
+   525→    set({ activeThreadRootId: rootId, threadLoading: true })
+   526→    try {
+   527→      const data = await api<{ replies: MessageDTO[] }>(`/api/messages/${rootId}/replies`)
+   528→      set((s) => ({ threadReplies: { ...s.threadReplies, [rootId]: data.replies }, threadLoading: false }))
+   529→    } catch {
+   530→      set({ threadLoading: false })
+   531→    }
+   532→  },
+   533→
+   534→  closeThread: () => set({ activeThreadRootId: null, editingMessageId: null }),
+   535→
+   536→  // ── channel mutations ─────────────────────────────────────────────────────
+   537→  createChannel: async (name, topic, kind, memberIds) => {
+   538→    try {
+   539→      const data = await api<{ id: string }>('/api/channels', {
+   540→        method: 'POST',
+   541→        body: { name, topic, kind, memberIds },
+   542→      })
+   543→      await get().fetchChannels()
+   544→      await get().openChannel(data.id)
+   545→      return data.id
+   546→    } catch (err) {
+   547→      throw err
+   548→    }
+   549→  },
+   550→
+   551→  createDm: async (userIds) => {
+   552→    const data = await api<{ channel: ChannelDTO }>('/api/dms', { method: 'POST', body: { userIds } })
+   553→    const channel = data.channel
+   554→    set((s) => ({
+   555→      channels: s.channels.some((c) => c.id === channel.id) ? s.channels : [...s.channels, channel],
+   556→    }))
+   557→    await get().openChannel(channel.id)
+   558→    return channel.id
+   559→  },
+   560→
+   561→  joinChannel: async (channelId) => {
+   562→    await api(`/api/channels/${channelId}/join`, { method: 'POST' })
+   563→    await get().fetchChannels()
+   564→    await get().openChannel(channelId)
+   565→  },
+   566→
+   567→  leaveChannel: async (channelId) => {
+   568→    await api(`/api/channels/${channelId}/leave`, { method: 'POST' })
+   569→    const wasActive = get().activeChannelId === channelId
+   570→    await get().fetchChannels()
+   571→    if (wasActive) {
+   572→      const general = get().channels.find((c) => c.slug === 'general')
+   573→      if (general) await get().openChannel(general.id)
+   574→      else set({ activeChannelId: null })
+   575→    }
+   576→  },
+   577→
+   578→  addChannelMember: async (channelId, userId) => {
+   579→    await api(`/api/channels/${channelId}/members`, { method: 'POST', body: { userId } })
+   580→    await get().fetchChannels()
+   581→  },
+   582→
+   583→  updateChannel: async (channelId, patch) => {
+   584→    const data = await api<{ name: string; topic: string | null; isArchived: boolean }>(
+   585→      `/api/channels/${channelId}`,
+   586→      { method: 'PATCH', body: patch },
+   587→    )
+   588→    set((s) => ({
+   589→      channels: s.channels.map((c) =>
+   590→        c.id === channelId
+   591→          ? { ...c, name: data.name, topic: data.topic, isArchived: data.isArchived }
+   592→          : c,
+   593→      ),
+   594→    }))
+   595→  },
+   596→
+   597→  setNotifyPrefs: async (channelId, patch) => {
+   598→    // optimistic
+   599→    set((s) => ({
+   600→      channels: s.channels.map((c) => (c.id === channelId ? { ...c, ...patch } : c)),
+   601→    }))
+   602→    try {
+   603→      await api(`/api/channels/${channelId}/members`, { method: 'PATCH', body: patch })
+   604→    } catch {
+   605→      await get().fetchChannels()
+   606→    }
+   607→  },
+   608→
+   609→  markChannelRead: (channelId, messageId) => {
+   610→    set((s) => ({
+   611→      channels: s.channels.map((c) =>
+   612→        c.id === channelId ? { ...c, unread: 0, mentionCount: 0 } : c,
+   613→      ),
+   614→    }))
+   615→    if (messageId) {
+   616→      void api(`/api/channels/${channelId}/read`, { method: 'POST', body: { messageId } }).catch(
+   617→        () => {},
+   618→      )
+   619→    }
+   620→  },
+   621→
+   622→  setDraft: (channelId, text) => {
+   623→    set((s) => {
+   624→      const drafts = { ...s.drafts, [channelId]: text }
+   625→      saveDrafts(drafts)
+   626→      return { drafts }
+   627→    })
+   628→  },
+   629→
+   630→  // ── saved messages (bookmarks) ────────────────────────────────────────────
+   631→  toggleSavedMessage: (id) => {
+   632→    set((s) => {
+   633→      const wasSaved = s.savedMessageIds.includes(id)
+   634→      const ids = wasSaved
+   635→        ? s.savedMessageIds.filter((x) => x !== id)
+   636→        : [id, ...s.savedMessageIds]
+   637→      saveIds(ids)
+   638→      let extras = s.savedExtras
+   639→      if (!wasSaved) {
+   640→        // snapshot the DTO so the saved view keeps working after the channel unloads
+   641→        const found = findLoadedMessage(s, id)
+   642→        if (found) extras = { ...s.savedExtras, [id]: found }
+   643→      } else {
+   644→        const rest = { ...s.savedExtras }
+   645→        delete rest[id]
+   646→        extras = rest
+   647→      }
+   648→      return { savedMessageIds: ids, savedExtras: extras }
+   649→    })
+   650→  },
+   651→
+   652→  isSaved: (id) => get().savedMessageIds.includes(id),
+   653→
+   654→  refreshSavedExtras: async () => {
+   655→    if (savedRefreshInFlight) return
+   656→    savedRefreshInFlight = true
+   657→    try {
+   658→      const ids = get().savedMessageIds.filter((id) => !findLoadedMessage(get(), id))
+   659→      const results = await Promise.all(
+   660→        ids.map(async (id) => {
+   661→          try {
+   662→            const data = await api<{ message: MessageDTO }>(`/api/messages/${id}`)
+   663→            return [id, data.message] as const
+   664→          } catch {
+   665→            return null
+   666→          }
+   667→        }),
+   668→      )
+   669→      set((s) => {
+   670→        const extras = { ...s.savedExtras }
+   671→        for (const entry of results) if (entry) extras[entry[0]] = entry[1]
+   672→        return { savedExtras: extras }
+   673→      })
+   674→    } finally {
+   675→      savedRefreshInFlight = false
+   676→    }
+   677→  },
+   678→
+   679→  updateMe: async (patch) => {
+   680→    const user = await api<UserDTO>('/api/me', { method: 'PATCH', body: patch })
+   681→    set((s) => ({
+   682→      me: user,
+   683→      users: s.users.map((u) => (u.id === user.id ? user : u)),
+   684→    }))
+   685→  },
+   686→
+   687→  markNotificationsRead: async (ids) => {
+   688→    set((s) => ({
+   689→      notifications: s.notifications.map((n) =>
+   690→        !ids || ids.includes(n.id) ? { ...n, readAt: n.readAt ?? new Date().toISOString() } : n,
+   691→      ),
+   692→      notificationsUnread: 0,
+   693→    }))
+   694→    await api('/api/notifications', { method: 'POST', body: ids ? { ids } : {} })
+   695→  },
+   696→
+   697→  emitTyping: (channelId) => {
+   698→    const me = get().me
+   699→    if (me) sendTyping(channelId, me.name)
+   700→  },
+   701→
+   702→  // ── realtime handlers ──────────────────────────────────────────────────────
+   703→  setConnected: (connected) => set({ connected }),
+   704→  setPresenceList: (userIds) => {
+   705→    const me = get().me
+   706→    const presence: Record<string, boolean> = {}
+   707→    for (const id of userIds) presence[id] = true
+   708→    if (me) presence[me.id] = true
+   709→    set({ presence })
+   710→  },
+   711→  setPresence: (userId, online) =>
+   712→    set((s) => ({ presence: { ...s.presence, [userId]: online } })),
+   713→
+   714→  handleNewMessage: (message) => {
+   715→    const me = get().me
+   716→    set((s) => {
+   717→      const isMine = !!me && message.sender?.id === me.id
+   718→      // Thread reply
+   719→      if (message.parentId) {
+   720→        const replies = s.threadReplies[message.parentId]
+   721→        const channels = touchChannel(s.channels, message.channelId, message)
+   722→        if (!replies) {
+   723→          return {
+   724→            channels,
+   725→            messagesByChannel: {
+   726→              ...s.messagesByChannel,
+   727→              [message.channelId]: bumpReplyCount(
+   728→                s.messagesByChannel[message.channelId] ?? [],
+   729→                message.parentId,
+   730→                1,
+   731→              ),
+   732→            },
+   733→          }
+   734→        }
+   735→        if (replies.some((r) => r.id === message.id)) return {}
+   736→        return {
+   737→          channels,
+   738→          threadReplies: { ...s.threadReplies, [message.parentId]: [...replies, message] },
+   739→          messagesByChannel: {
+   740→            ...s.messagesByChannel,
+   741→            [message.channelId]: bumpReplyCount(
+   742→              s.messagesByChannel[message.channelId] ?? [],
+   743→              message.parentId,
+   744→              1,
+   745→            ),
+   746→          },
+   747→        }
+   748→      }
+   749→
+   750→      // Top-level message
+   751→      const list = s.messagesByChannel[message.channelId]
+   752→      const channels = touchChannel(s.channels, message.channelId, message)
+   753→      if (!list) {
+   754→        // Channel not loaded — bump unread counters instead
+   755→        return {
+   756→          channels: isMine
+   757→            ? channels
+   758→            : channels.map((c) =>
+   759→                c.id === message.channelId && c.isMember
+   760→                  ? { ...c, unread: c.unread + 1 }
+   761→                  : c,
+   762→              ),
+   763→        }
+   764→      }
+   765→      if (list.some((m) => m.id === message.id)) return {}
+   766→      const isActive = s.activeChannelId === message.channelId
+   767→      const shouldCountUnread = !isMine && !isActive
+   768→      return {
+   769→        channels: shouldCountUnread
+   770→          ? channels.map((c) =>
+   771→              c.id === message.channelId && c.isMember ? { ...c, unread: c.unread + 1 } : c,
+   772→            )
+   773→          : channels,
+   774→        messagesByChannel: { ...s.messagesByChannel, [message.channelId]: [...list, message] },
+   775→      }
+   776→    })
+   777→    // Clear the sender's typing indicator
+   778→    if (message.sender) {
+   779→      get().handleTyping(message.channelId, message.sender.id, '', undefined, true)
+   780→    }
+   781→    // If channel is active but window hidden, mark unread for badge (skip — keep simple)
+   782→  },
+   783→
+   784→  handleMessageUpdated: (message) => {
+   785→    set((s) => {
+   786→      const list = s.messagesByChannel[message.channelId]
+   787→      return {
+   788→        messagesByChannel: list
+   789→          ? {
+   790→              ...s.messagesByChannel,
+   791→              [message.channelId]: replaceMessage(list, message.id, message),
+   792→            }
+   793→          : s.messagesByChannel,
+   794→        threadReplies: Object.fromEntries(
+   795→          Object.entries(s.threadReplies).map(([rootId, replies]) => [
+   796→            rootId,
+   797→            replaceMessage(replies, message.id, message),
+   798→          ]),
+   799→        ),
+   800→      }
+   801→    })
+   802→  },
+   803→
+   804→  handleMessageDeleted: (id, channelId) => {
+   805→    const now = new Date().toISOString()
+   806→    set((s) => ({
+   807→      messagesByChannel: {
+   808→        ...s.messagesByChannel,
+   809→        [channelId]: (s.messagesByChannel[channelId] ?? []).map((m) =>
+   810→          m.id === id ? { ...m, deletedAt: now, isPinned: false, reactions: [], files: [] } : m,
+   811→        ),
+   812→      },
+   813→    }))
+   814→  },
+   815→
+   816→  handleReactionUpdated: (channelId, messageId, reactions) => {
+   817→    set((s) => ({
+   818→      messagesByChannel: {
+   819→        ...s.messagesByChannel,
+   820→        [channelId]: (s.messagesByChannel[channelId] ?? []).map((m) =>
+   821→          m.id === messageId ? { ...m, reactions } : m,
+   822→        ),
+   823→      },
+   824→    }))
+   825→  },
+   826→
+   827→  handleTyping: (channelId, userId, name, kind, stop) => {
+   828→    set((s) => {
+   829→      const channelTyping = { ...(s.typing[channelId] ?? {}) }
+   830→      if (stop) delete channelTyping[userId]
+   831→      else channelTyping[userId] = { name: name || 'Someone', at: Date.now(), kind }
+   832→      return { typing: { ...s.typing, [channelId]: channelTyping } }
+   833→    })
+   834→  },
+   835→
+   836→  handleNotification: (notification) => {
+   837→    set((s) => ({
+   838→      notifications: [notification, ...s.notifications].slice(0, 50),
+   839→      notificationsUnread: s.notificationsUnread + 1,
+   840→    }))
+   841→  },
+   842→
+   843→  handleChannelsRefresh: async () => {
+   844→    await get().fetchChannels()
+   845→  },
+   846→
+   847→  // ── ui setters ─────────────────────────────────────────────────────────────
+   848→  setSearchOpen: (open, seed = '') => set({ searchOpen: open, searchSeed: seed }),
+   849→  setShortcutsOpen: (open) => set({ shortcutsOpen: open }),
+   850→  setCreateChannelOpen: (open) => set({ createChannelOpen: open }),
+   851→  setBrowseChannelsOpen: (open) => set({ browseChannelsOpen: open }),
+   852→  setNewDmOpen: (open) => set({ newDmOpen: open }),
+   853→  setSettingsOpen: (open) => set({ settingsOpen: open }),
+   854→  setProfileUserId: (userId) => set({ profileUserId: userId }),
+   855→  setImageViewer: (viewer) => set({ imageViewer: viewer }),
+   856→  setDrawerOpen: (open) => set({ drawerOpen: open }),
+   857→  setEditingMessageId: (id) => set({ editingMessageId: id }),
+   858→  setJumpToMessageId: (id) => set({ jumpToMessageId: id }),
+   859→}))
+   860→
+   861→// ── selectors (plain functions over getState) ────────────────────────────────
+   862→
+   863→export function getActiveChannel(state: ChatState): ChannelDTO | null {
+   864→  return state.channels.find((c) => c.id === state.activeChannelId) ?? null
+   865→}
+   866→
+   867→export function channelDisplayName(channel: ChannelDTO | null, meId: string | null): string {
+   868→  if (!channel) return ''
+   869→  if (channel.kind === 'dm') {
+   870→    const others = channel.members ?? []
+   871→    if (others.length === 1) return others[0].name
+   872→    return 'Direct message'
+   873→  }
+   874→  if (channel.kind === 'group_dm') {
+   875→    const others = (channel.members ?? []).map((m) => m.name.split(' ')[0])
+   876→    return others.join(', ') || channel.name
+   877→  }
+   878→  return channel.name
+   879→}
+   880→

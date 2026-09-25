@@ -30,7 +30,20 @@ export async function GET(_request: Request, { params }: Params) {
       },
     })
 
-    return { replies: replies.map((r) => serializeMessage(r as MessageFull)) }
+    // Thread-follow state for the viewer (root id — replies follow the root)
+    const rootId = root.parentId ?? root.id
+    const follow = await db.threadFollow.findUnique({
+      where: { messageId_userId: { messageId: rootId, userId: me.id } },
+      select: { id: true },
+    })
+    const followerCount = await db.threadFollow.count({ where: { messageId: rootId } })
+
+    return {
+      replies: replies.map((r) => serializeMessage(r as MessageFull)),
+      rootId,
+      following: !!follow,
+      followerCount,
+    }
   })
 }
 

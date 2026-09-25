@@ -120,7 +120,16 @@ export function initSocket(userId: string, name: string): void {
     state.handleNotification(notification)
     const me = state.me
     if (!me || me.dndEnabled) return
-    toast(`${notification.actorName ?? 'Someone'} mentioned you`, {
+    const who = notification.actorName ?? 'Someone'
+    const headline =
+      notification.type === 'thread_reply'
+        ? `${who} replied in a thread`
+        : notification.type === 'mention' || notification.type === 'mention_special'
+          ? `${who} mentioned you`
+          : notification.type === 'workflow'
+            ? 'Workflow ran'
+            : who
+    toast(headline, {
       description: notification.body,
       action: notification.channelId
         ? {
