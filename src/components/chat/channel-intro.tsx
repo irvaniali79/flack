@@ -176,10 +176,10 @@ function GroupDmIntro({ channel }: { channel: ChannelDTO }) {
       <div className="flex items-start gap-4">
         <span className="flex shrink-0 -space-x-3">
           {members.slice(0, 4).map((member) => (
-            <UserAvatar key={member.id} user={member} size="lg" className="ring-2 ring-background dark:ring-zinc-900" />
+            <UserAvatar key={member.id} user={member} size="lg" className="ring-2 ring-background" />
           ))}
           {members.length > 4 && (
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-muted font-semibold text-muted-foreground ring-2 ring-background dark:ring-zinc-900">
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-muted font-semibold text-muted-foreground ring-2 ring-background">
               +{members.length - 4}
             </span>
           )}

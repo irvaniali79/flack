@@ -54,8 +54,8 @@ export function Rail() {
   const buttonClass = (active: boolean) =>
     cn(
       'relative flex h-11 w-11 items-center justify-center rounded-xl text-zinc-700 transition-colors duration-150 dark:text-zinc-400',
-      'hover:bg-zinc-200/80 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100',
-      active && 'bg-zinc-200/80 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100',
+      'hover:bg-accent-surface-hover hover:text-zinc-900 dark:hover:text-zinc-100',
+      active && 'bg-accent-surface-hover text-zinc-900 dark:text-zinc-100',
     )
 
   const accentClass = (active: boolean) =>
@@ -66,7 +66,7 @@ export function Rail() {
 
   return (
     <TooltipProvider delayDuration={250}>
-      <div className="flex h-full w-14 shrink-0 flex-col items-center gap-1 border-r border-border bg-zinc-100 py-3 dark:border-zinc-800 dark:bg-zinc-950">
+      <div className="flex h-full w-14 shrink-0 flex-col items-center gap-1 border-r border-border bg-accent-surface-2 py-3">
         {/* org block */}
         <Tooltip>
           <TooltipTrigger asChild>
@@ -82,7 +82,7 @@ export function Rail() {
           <TooltipContent side="right">Acme Inc</TooltipContent>
         </Tooltip>
 
-        <div className="my-2 h-px w-8 bg-zinc-300/80 dark:bg-zinc-800" aria-hidden />
+        <div className="my-2 h-px w-8 bg-emerald-400/30 dark:bg-emerald-800/40" aria-hidden />
 
         <Tooltip>
           <TooltipTrigger asChild>

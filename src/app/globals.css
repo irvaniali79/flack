@@ -41,11 +41,26 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  /* Themed surface utilities (bg-accent-surface etc.) — values live in :root/.dark below */
+  --color-accent-surface: var(--accent-surface);
+  --color-accent-surface-2: var(--accent-surface-2);
+  --color-accent-surface-hover: var(--accent-surface-hover);
+  --color-accent-field: var(--accent-field);
+  --color-accent-deep: var(--accent-deep);
 }
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
+  /* ── Themed surfaces ── derived from the ACTIVE accent ramp (--color-emerald-*),
+     so they auto-adapt when [data-accent] overrides the ramp. The canvas itself
+     (--background) carries a whisper of the hue; the sidebar/rail/fields carry
+     a stronger tint (Slack-style theme coverage of the whole UI). */
+  --background: color-mix(in oklab, var(--color-emerald-100) 40%, white);
+  --accent-surface: color-mix(in oklab, var(--color-emerald-100) 55%, white);
+  --accent-surface-2: color-mix(in oklab, var(--color-emerald-100) 85%, white);
+  --accent-surface-hover: color-mix(in oklab, var(--color-emerald-200) 60%, white);
+  --accent-field: color-mix(in oklab, var(--color-emerald-100) 72%, white);
+  --accent-deep: color-mix(in oklab, var(--color-emerald-950) 60%, #09090b);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
@@ -79,7 +94,12 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
+  --background: color-mix(in oklab, var(--color-emerald-950) 18%, #0b0b0d);
+  --accent-surface: color-mix(in oklab, var(--color-emerald-950) 42%, #121216);
+  --accent-surface-2: color-mix(in oklab, var(--color-emerald-950) 58%, #0a0a0d);
+  --accent-surface-hover: color-mix(in oklab, var(--color-emerald-900) 26%, #1e1e23);
+  --accent-field: color-mix(in oklab, var(--color-emerald-950) 38%, #242429);
+  --accent-deep: color-mix(in oklab, var(--color-emerald-950) 60%, #09090b);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);
@@ -115,10 +135,15 @@
 /* ─── Accent color themes (Slack-style theme picker) ─────────────────────────
    The app's accent is expressed through emerald-* utilities, which compile to
    var(--color-emerald-*) references — so overriding those custom properties on
-   <html data-accent='<key>'> recolors the entire app: logo tile, rail
-   indicators, buttons, badges, unread pills, presence dots, focus rings,
-   typing dots, splash… Keys mirror src/lib/theme-options.ts (keep in sync).
-   'emerald' (the default) defines no override — Tailwind's palette applies.
+   <html data-accent='<key>'> recolors the entire app. On top of the small
+   accents (logo tile, rail indicators, buttons, badges, unread pills, presence
+   dots, focus rings, typing dots, splash…), the themed SURFACE vars above
+   (--background / --accent-surface / -2 / -hover / -field) also derive from the
+   ramp, so switching a theme tints the chat canvas, rail, sidebar, search
+   fields, composer and login panel — full-UI theme coverage, Slack-style.
+   Keys mirror src/lib/theme-options.ts (keep in sync).
+   'emerald' (the default) defines no override — Tailwind's palette applies
+   (and still produces a soft mint canvas + sidebar tint via the mixes above).
    These blocks are intentionally UNLAYERED: unlayered rules beat the
    @layer theme defaults regardless of the :root specificity tie, and
    .dark[data-accent] (0,2,0) outranks [data-accent] (0,1,0).
@@ -291,13 +316,13 @@
   }
 }
 
-/* ─── Custom slim scrollbars ──────────────────────────────────────────────── */
+/* ─── Custom slim scrollbars (tinted by the active theme) ─────────────────── */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #d4d4d8 transparent;
+  scrollbar-color: color-mix(in oklab, var(--color-emerald-300) 35%, #d4d4d8) transparent;
 }
 .dark * {
-  scrollbar-color: #52525b transparent;
+  scrollbar-color: color-mix(in oklab, var(--color-emerald-700) 35%, #52525b) transparent;
 }
 *::-webkit-scrollbar {
   width: 8px;
@@ -307,17 +332,17 @@
   background: transparent;
 }
 *::-webkit-scrollbar-thumb {
-  background: #d4d4d8;
+  background: color-mix(in oklab, var(--color-emerald-300) 35%, #d4d4d8);
   border-radius: 999px;
 }
 .dark *::-webkit-scrollbar-thumb {
-  background: #52525b;
+  background: color-mix(in oklab, var(--color-emerald-700) 35%, #52525b);
 }
 *::-webkit-scrollbar-thumb:hover {
-  background: #a1a1aa;
+  background: color-mix(in oklab, var(--color-emerald-400) 55%, #a1a1aa);
 }
 .dark *::-webkit-scrollbar-thumb:hover {
-  background: #71717a;
+  background: color-mix(in oklab, var(--color-emerald-500) 45%, #71717a);
 }
 
 /* ─── Editor / animations ─────────────────────────────────────────────────── */

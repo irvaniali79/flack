@@ -104,7 +104,7 @@ function SnoozeMenu({ onSnooze }: { onSnooze: (preset: { minutes?: number; until
         <button
           type="button"
           aria-label="Snooze notification"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity duration-150 hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity duration-150 hover:bg-accent-surface-hover hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
         >
           <Clock className="h-3.5 w-3.5" aria-hidden />
         </button>
@@ -121,7 +121,7 @@ function SnoozeMenu({ onSnooze }: { onSnooze: (preset: { minutes?: number; until
               onSnooze(preset.minutes !== undefined ? { minutes: preset.minutes } : { until: preset.until })
               setOpen(false)
             }}
-            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] transition-colors duration-150 hover:bg-accent"
+            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] transition-colors duration-150 hover:bg-accent-surface-hover"
           >
             <Clock className="h-3 w-3 text-muted-foreground" aria-hidden />
             {preset.label}
@@ -167,7 +167,7 @@ function NotificationBell() {
         <button
           type="button"
           aria-label={`Notifications${unread > 0 ? ` — ${unread} unread` : ''}`}
-          className="relative flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground"
+          className="relative flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-accent-surface-hover hover:text-foreground"
         >
           <Bell className="h-[18px] w-[18px]" aria-hidden />
           {unread > 0 && (
@@ -231,7 +231,7 @@ function NotificationBell() {
                 <div
                   key={notification.id}
                   className={cn(
-                    'group flex items-start gap-1 rounded-lg px-2 py-2 transition-colors duration-150 hover:bg-accent',
+                    'group flex items-start gap-1 rounded-lg px-2 py-2 transition-colors duration-150 hover:bg-accent-surface-hover',
                     !notification.readAt && 'bg-emerald-500/5',
                   )}
                 >
@@ -297,7 +297,7 @@ function NotificationBell() {
                           void markNotificationsRead([notification.id])
                           setOpen(false)
                         }}
-                        className="flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left opacity-70 transition-all duration-150 hover:bg-accent hover:opacity-100"
+                        className="flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left opacity-70 transition-all duration-150 hover:bg-accent-surface-hover hover:opacity-100"
                       >
                         <span
                           className={cn(
@@ -424,7 +424,7 @@ function ChannelRow({ channel }: { channel: ChannelDTO }) {
         'group relative flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-all duration-150 hover:translate-x-0.5',
         active
           ? 'bg-emerald-600/15 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
-          : 'text-foreground/75 hover:bg-accent hover:text-foreground',
+          : 'text-foreground/75 hover:bg-accent-surface-hover hover:text-foreground',
         channel.unread > 0 && !active && 'font-medium text-foreground',
       )}
     >
@@ -474,7 +474,7 @@ function AgentLauncherRow({ agent, onStart }: { agent: AgentDTO; onStart: (userI
       type="button"
       onClick={() => onStart(agent.userId)}
       title={`Start a chat with ${agent.user.name} (@${agent.handle})${agent.description ? ` — ${agent.description}` : ''}`}
-      className="group flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-foreground/65 transition-all duration-150 hover:translate-x-0.5 hover:bg-accent hover:text-foreground"
+      className="group flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-foreground/65 transition-all duration-150 hover:translate-x-0.5 hover:bg-accent-surface-hover hover:text-foreground"
     >
       <span className="shrink-0">
         <UserAvatar user={agent.user} size="xs" />
@@ -519,7 +519,7 @@ function WorkspaceRow({
         'group relative flex min-h-9 w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-all duration-150 hover:translate-x-0.5',
         active
           ? 'bg-emerald-600/15 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
-          : 'text-foreground/75 hover:bg-accent hover:text-foreground',
+          : 'text-foreground/75 hover:bg-accent-surface-hover hover:text-foreground',
       )}
     >
       {/* active left bar */}
@@ -607,7 +607,7 @@ export function Sidebar({
   }
 
   return (
-    <div className="flex h-full w-full flex-col bg-zinc-50 dark:bg-zinc-900">
+    <div className="flex h-full w-full flex-col bg-accent-surface">
       {/* org header */}
       <div className="flex items-center gap-1 px-2.5 pb-2 pt-3">
         <DropdownMenu>
@@ -615,7 +615,7 @@ export function Sidebar({
             <button
               type="button"
               aria-label="Workspace menu"
-              className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-1.5 py-1.5 transition-colors duration-150 hover:bg-accent"
+              className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-1.5 py-1.5 transition-colors duration-150 hover:bg-accent-surface-hover"
             >
               <span className="relative flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-600 text-xs font-black text-white">
                 A
@@ -680,7 +680,7 @@ export function Sidebar({
           aria-label="Keyboard shortcuts"
           title="Keyboard shortcuts (?)"
           onClick={() => setShortcutsOpen(true)}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-accent-surface-hover hover:text-foreground"
         >
           <Keyboard className="h-[18px] w-[18px]" aria-hidden />
         </button>
@@ -692,7 +692,7 @@ export function Sidebar({
         <button
           type="button"
           onClick={() => setSearchOpen(true)}
-          className="flex w-full items-center gap-2 rounded-lg border border-transparent bg-zinc-200/70 px-2.5 py-1.5 text-sm text-foreground/75 transition-all duration-150 hover:border-border hover:bg-zinc-200 focus-visible:border-emerald-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-800/80 dark:focus-visible:border-emerald-400/40"
+          className="flex w-full items-center gap-2 rounded-lg border border-transparent bg-accent-field px-2.5 py-1.5 text-sm text-foreground/75 transition-all duration-150 hover:border-border hover:bg-accent-surface-hover-surface-hover focus-visible:border-emerald-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30 dark:text-zinc-300 dark:focus-visible:border-emerald-400/40"
         >
           <Search className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
           <span className="flex-1 text-left">Search…</span>
@@ -716,7 +716,7 @@ export function Sidebar({
             'flex w-full items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm transition-all duration-150',
             view === 'saved'
               ? 'border-emerald-500/40 bg-emerald-600/15 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
-              : 'border-transparent bg-zinc-200/70 text-foreground/80 hover:border-border hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-800/80',
+              : 'border-transparent bg-accent-field text-foreground/80 hover:border-border hover:bg-accent-surface-hover-surface-hover',
           )}
         >
           <Bookmark
@@ -781,7 +781,7 @@ export function Sidebar({
               type="button"
               aria-label="Browse channels"
               onClick={() => setBrowseChannelsOpen(true)}
-              className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground"
+              className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors duration-150 hover:bg-accent-surface-hover hover:text-foreground"
             >
               <Compass className="h-3.5 w-3.5" aria-hidden />
             </button>
@@ -789,7 +789,7 @@ export function Sidebar({
               type="button"
               aria-label="Create channel"
               onClick={() => setCreateChannelOpen(true)}
-              className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground"
+              className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors duration-150 hover:bg-accent-surface-hover hover:text-foreground"
             >
               <Plus className="h-3.5 w-3.5" aria-hidden />
             </button>
@@ -825,7 +825,7 @@ export function Sidebar({
               aria-label="Manage agents"
               title="Manage AI agents"
               onClick={() => setAgentsDialogOpen(true)}
-              className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground"
+              className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors duration-150 hover:bg-accent-surface-hover hover:text-foreground"
             >
               <Bot className="h-3.5 w-3.5" aria-hidden />
             </button>
@@ -834,7 +834,7 @@ export function Sidebar({
               aria-label="New direct message"
               title="New conversation — people & AI agents"
               onClick={() => setNewDmOpen(true)}
-              className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground"
+              className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors duration-150 hover:bg-accent-surface-hover hover:text-foreground"
             >
               <Plus className="h-3.5 w-3.5" aria-hidden />
             </button>
@@ -863,7 +863,7 @@ export function Sidebar({
         <button
           type="button"
           onClick={() => setProfileUserId(me.id)}
-          className="flex items-center gap-2.5 border-t border-border px-3 py-3 transition-colors duration-150 hover:bg-accent"
+          className="flex items-center gap-2.5 border-t border-border px-3 py-3 transition-colors duration-150 hover:bg-accent-surface-hover"
           aria-label="Open my profile"
         >
           <UserAvatar user={me} size="sm" presence online />

@@ -716,8 +716,8 @@ export function Composer({ parentId, placeholder }: { parentId?: string; placeho
 
       <div
         className={cn(
-          'relative rounded-xl border bg-gradient-to-b from-card to-muted/25 shadow-sm transition-all duration-150',
-          'focus-within:border-emerald-500/50 focus-within:from-card focus-within:shadow-lg focus-within:shadow-emerald-500/10',
+          'relative rounded-xl border bg-accent-field shadow-sm transition-all duration-150',
+          'focus-within:border-emerald-500/50 focus-within:shadow-lg focus-within:shadow-emerald-500/10',
           editingMessage ? 'rounded-t-none border-amber-500/40' : 'border-border/80 hover:border-border',
           dragging && 'border-emerald-500 ring-2 ring-emerald-500/30',
         )}
