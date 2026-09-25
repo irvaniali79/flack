@@ -1,0 +1,778 @@
+'use client'
+// Central zustand store: session, data, realtime state, drafts + UI flags.
+import { create } from 'zustand'
+import { api } from './api'
+import type {
+  AgentDTO,
+  ChannelDTO,
+  MessageDTO,
+  NotificationDTO,
+  ReactionDTO,
+  UserDTO,
+} from './types'
+import {
+  disconnectSocket,
+  initSocket,
+  sendTyping,
+  socketJoinChannel,
+  socketLeaveChannel,
+} from './socket'
+
+const DRAFT_KEY = 'acme-drafts'
+
+function loadDrafts(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY)
+    const parsed = raw ? JSON.parse(raw) : {}
+    return typeof parsed === 'object' && parsed ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function saveDrafts(drafts: Record<string, string>) {
+  try {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(drafts))
+  } catch {
+    // ignore
+  }
+}
+
+export interface BootstrapResponse {
+  me: UserDTO
+  org: { name: string }
+  users: UserDTO[]
+  channels: ChannelDTO[]
+  agents: AgentDTO[]
+  notificationsUnread: number
+}
+
+export interface TypingEntry {
+  name: string
+  at: number
+  kind?: string
+}
+
+interface ChatState {
+  // ── data ──────────────────────────────────────────────────────────────────
+  me: UserDTO | null
+  orgName: string
+  users: UserDTO[]
+  channels: ChannelDTO[]
+  agents: AgentDTO[]
+  activeChannelId: string | null
+  activeThreadRootId: string | null
+  messagesByChannel: Record<string, MessageDTO[]>
+  messagesLoading: Record<string, boolean>
+  hasMoreByChannel: Record<string, boolean>
+  loadingOlder: Record<string, boolean>
+  unreadDividerByChannel: Record<string, string | null>
+  threadReplies: Record<string, MessageDTO[]>
+  threadLoading: boolean
+  presence: Record<string, boolean>
+  typing: Record<string, Record<string, TypingEntry>>
+  notifications: NotificationDTO[]
+  notificationsUnread: number
+  connected: boolean
+  bootstrapping: boolean
+
+  // ── drafts (persisted) ────────────────────────────────────────────────────
+  drafts: Record<string, string>
+
+  // ── ui state ──────────────────────────────────────────────────────────────
+  searchOpen: boolean
+  searchSeed: string
+  createChannelOpen: boolean
+  browseChannelsOpen: boolean
+  newDmOpen: boolean
+  settingsOpen: boolean
+  profileUserId: string | null
+  imageViewer: { url: string; name: string; size?: number } | null
+  drawerOpen: boolean
+  editingMessageId: string | null
+  jumpToMessageId: string | null
+
+  // ── actions ───────────────────────────────────────────────────────────────
+  fetchBootstrap: () => Promise<void>
+  login: (email: string, password: string) => Promise<void>
+  register: (email: string, name: string, password: string) => Promise<void>
+  logout: () => Promise<void>
+  fetchChannels: () => Promise<void>
+  fetchNotifications: () => Promise<void>
+  openChannel: (channelId: string) => Promise<void>
+  closeChannel: () => void
+  fetchMessages: (channelId: string) => Promise<void>
+  loadOlder: (channelId: string) => Promise<void>
+  sendMessage: (body: string, fileIds?: string[], parentId?: string) => Promise<void>
+  editMessage: (messageId: string, body: string) => Promise<void>
+  deleteMessage: (messageId: string) => Promise<void>
+  toggleReaction: (messageId: string, emoji: string) => Promise<void>
+  togglePin: (messageId: string, pinned: boolean) => Promise<void>
+  openThread: (rootId: string) => Promise<void>
+  closeThread: () => void
+  createChannel: (
+    name: string,
+    topic: string,
+    kind: 'public' | 'private',
+    memberIds: string[],
+  ) => Promise<string | null>
+  createDm: (userIds: string[]) => Promise<string | null>
+  joinChannel: (channelId: string) => Promise<void>
+  leaveChannel: (channelId: string) => Promise<void>
+  addChannelMember: (channelId: string, userId: string) => Promise<void>
+  updateChannel: (
+    channelId: string,
+    patch: { name?: string; topic?: string | null; isArchived?: boolean },
+  ) => Promise<void>
+  setNotifyPrefs: (channelId: string, patch: { notifyLevel?: ChannelDTO['notifyLevel']; muted?: boolean }) => Promise<void>
+  markChannelRead: (channelId: string, messageId: string | null) => void
+  setDraft: (channelId: string, text: string) => void
+  updateMe: (patch: Partial<Pick<UserDTO, 'name' | 'title' | 'statusEmoji' | 'statusText' | 'dndEnabled' | 'timezone'>>) => Promise<void>
+  markNotificationsRead: (ids?: string[]) => Promise<void>
+  emitTyping: (channelId: string) => void
+
+  // ── realtime handlers (called from socket.ts) ─────────────────────────────
+  setConnected: (connected: boolean) => void
+  setPresenceList: (userIds: string[]) => void
+  setPresence: (userId: string, online: boolean) => void
+  handleNewMessage: (message: MessageDTO) => void
+  handleMessageUpdated: (message: MessageDTO) => void
+  handleMessageDeleted: (id: string, channelId: string) => void
+  handleReactionUpdated: (channelId: string, messageId: string, reactions: ReactionDTO[]) => void
+  handleTyping: (channelId: string, userId: string, name: string, kind?: string, stop?: boolean) => void
+  handleNotification: (notification: NotificationDTO) => void
+  handleChannelsRefresh: () => Promise<void>
+
+  // ── ui setters ────────────────────────────────────────────────────────────
+  setSearchOpen: (open: boolean, seed?: string) => void
+  setCreateChannelOpen: (open: boolean) => void
+  setBrowseChannelsOpen: (open: boolean) => void
+  setNewDmOpen: (open: boolean) => void
+  setSettingsOpen: (open: boolean) => void
+  setProfileUserId: (userId: string | null) => void
+  setImageViewer: (viewer: { url: string; name: string; size?: number } | null) => void
+  setDrawerOpen: (open: boolean) => void
+  setEditingMessageId: (id: string | null) => void
+  setJumpToMessageId: (id: string | null) => void
+}
+
+function replaceMessage(list: MessageDTO[], messageId: string, next: MessageDTO): MessageDTO[] {
+  const idx = list.findIndex((m) => m.id === messageId)
+  if (idx === -1) return list
+  const copy = [...list]
+  copy[idx] = next
+  return copy
+}
+
+function bumpReplyCount(list: MessageDTO[], rootId: string, delta: number): MessageDTO[] {
+  const idx = list.findIndex((m) => m.id === rootId)
+  if (idx === -1) return list
+  const copy = [...list]
+  copy[idx] = { ...copy[idx], replyCount: Math.max(0, copy[idx].replyCount + delta) }
+  return copy
+}
+
+function touchChannel(channels: ChannelDTO[], channelId: string, message: MessageDTO): ChannelDTO[] {
+  return channels.map((c) =>
+    c.id === channelId
+      ? {
+          ...c,
+          lastMessage: {
+            body: message.body,
+            createdAt: message.createdAt,
+            senderName: message.sender?.name ?? null,
+          },
+        }
+      : c,
+  )
+}
+
+export const useChatStore = create<ChatState>((set, get) => ({
+  me: null,
+  orgName: 'Acme',
+  users: [],
+  channels: [],
+  agents: [],
+  activeChannelId: null,
+  activeThreadRootId: null,
+  messagesByChannel: {},
+  messagesLoading: {},
+  hasMoreByChannel: {},
+  loadingOlder: {},
+  unreadDividerByChannel: {},
+  threadReplies: {},
+  threadLoading: false,
+  presence: {},
+  typing: {},
+  notifications: [],
+  notificationsUnread: 0,
+  connected: false,
+  bootstrapping: false,
+
+  drafts: typeof window !== 'undefined' ? loadDrafts() : {},
+
+  searchOpen: false,
+  searchSeed: '',
+  createChannelOpen: false,
+  browseChannelsOpen: false,
+  newDmOpen: false,
+  settingsOpen: false,
+  profileUserId: null,
+  imageViewer: null,
+  drawerOpen: false,
+  editingMessageId: null,
+  jumpToMessageId: null,
+
+  // ── session ────────────────────────────────────────────────────────────────
+  fetchBootstrap: async () => {
+    set({ bootstrapping: true })
+    try {
+      const data = await api<BootstrapResponse>('/api/bootstrap')
+      set({
+        me: data.me,
+        orgName: data.org.name,
+        users: data.users,
+        channels: data.channels,
+        agents: data.agents,
+        notificationsUnread: data.notificationsUnread,
+        bootstrapping: false,
+      })
+      const { me } = get()
+      if (me) initSocket(me.id, me.name)
+    } catch {
+      set({ me: null, bootstrapping: false })
+    }
+  },
+
+  login: async (email, password) => {
+    await api<{ user: UserDTO }>('/api/auth/login', { method: 'POST', body: { email, password } })
+    await get().fetchBootstrap()
+  },
+
+  register: async (email, name, password) => {
+    await api<{ user: UserDTO }>('/api/auth/register', { method: 'POST', body: { email, name, password } })
+    await get().fetchBootstrap()
+  },
+
+  logout: async () => {
+    try {
+      await api('/api/auth/logout', { method: 'POST' })
+    } catch {
+      // best-effort
+    }
+    disconnectSocket()
+    set({
+      me: null,
+      users: [],
+      channels: [],
+      agents: [],
+      activeChannelId: null,
+      activeThreadRootId: null,
+      messagesByChannel: {},
+      threadReplies: {},
+      presence: {},
+      typing: {},
+      notifications: [],
+      notificationsUnread: 0,
+      drawerOpen: false,
+      searchOpen: false,
+      profileUserId: null,
+      settingsOpen: false,
+    })
+  },
+
+  fetchChannels: async () => {
+    const { me } = get()
+    if (!me) return
+    try {
+      const data = await api<{ channels: ChannelDTO[] }>('/api/channels')
+      set({ channels: data.channels })
+    } catch {
+      // ignore — keep stale list
+    }
+  },
+
+  fetchNotifications: async () => {
+    try {
+      const data = await api<{ notifications: NotificationDTO[] }>('/api/notifications')
+      set({
+        notifications: data.notifications,
+        notificationsUnread: data.notifications.filter((n) => !n.readAt).length,
+      })
+    } catch {
+      // ignore
+    }
+  },
+
+  // ── channels ───────────────────────────────────────────────────────────────
+  openChannel: async (channelId) => {
+    const prev = get().activeChannelId
+    if (prev && prev !== channelId) socketLeaveChannel(prev)
+    set({ activeChannelId: channelId, activeThreadRootId: null, drawerOpen: false, editingMessageId: null })
+    socketJoinChannel(channelId)
+
+    const channel = get().channels.find((c) => c.id === channelId)
+    const unread = channel?.unread ?? 0
+    await get().fetchMessages(channelId)
+
+    // Track the unread divider position before marking read
+    const messages = get().messagesByChannel[channelId] ?? []
+    let divider: string | null = null
+    if (unread > 0 && messages.length > 0) {
+      const idx = Math.max(0, messages.length - unread)
+      divider = messages[idx]?.id ?? null
+    }
+    const last = messages[messages.length - 1]
+    if (last) get().markChannelRead(channelId, last.id)
+    set((s) => ({
+      unreadDividerByChannel: { ...s.unreadDividerByChannel, [channelId]: divider },
+    }))
+  },
+
+  closeChannel: () => {
+    const prev = get().activeChannelId
+    if (prev) socketLeaveChannel(prev)
+    set({ activeChannelId: null, activeThreadRootId: null })
+  },
+
+  fetchMessages: async (channelId) => {
+    if (get().messagesLoading[channelId]) return
+    set((s) => ({ messagesLoading: { ...s.messagesLoading, [channelId]: true } }))
+    try {
+      const data = await api<{ messages: MessageDTO[]; hasMore: boolean }>(
+        `/api/channels/${channelId}/messages?limit=50`,
+      )
+      set((s) => ({
+        messagesByChannel: { ...s.messagesByChannel, [channelId]: data.messages },
+        hasMoreByChannel: { ...s.hasMoreByChannel, [channelId]: data.hasMore },
+        messagesLoading: { ...s.messagesLoading, [channelId]: false },
+      }))
+    } catch {
+      set((s) => ({ messagesLoading: { ...s.messagesLoading, [channelId]: false } }))
+    }
+  },
+
+  loadOlder: async (channelId) => {
+    const { messagesByChannel, hasMoreByChannel, loadingOlder } = get()
+    if (!hasMoreByChannel[channelId] || loadingOlder[channelId]) return
+    const messages = messagesByChannel[channelId] ?? []
+    const oldest = messages[0]
+    if (!oldest) return
+    set((s) => ({ loadingOlder: { ...s.loadingOlder, [channelId]: true } }))
+    try {
+      const data = await api<{ messages: MessageDTO[]; hasMore: boolean }>(
+        `/api/channels/${channelId}/messages?limit=50&beforeId=${oldest.id}`,
+      )
+      set((s) => ({
+        messagesByChannel: {
+          ...s.messagesByChannel,
+          [channelId]: [...data.messages, ...(s.messagesByChannel[channelId] ?? [])],
+        },
+        hasMoreByChannel: { ...s.hasMoreByChannel, [channelId]: data.hasMore },
+        loadingOlder: { ...s.loadingOlder, [channelId]: false },
+      }))
+    } catch {
+      set((s) => ({ loadingOlder: { ...s.loadingOlder, [channelId]: false } }))
+    }
+  },
+
+  // ── messages ───────────────────────────────────────────────────────────────
+  sendMessage: async (body, fileIds, parentId) => {
+    const channelId = get().activeChannelId
+    if (!channelId) return
+    const data = await api<{ message: MessageDTO }>(`/api/channels/${channelId}/messages`, {
+      method: 'POST',
+      body: { body, fileIds, parentId },
+    })
+    const message = data.message
+    set((s) => {
+      if (message.parentId) {
+        const replies = s.threadReplies[message.parentId] ?? []
+        if (replies.some((r) => r.id === message.id)) return {}
+        return {
+          threadReplies: { ...s.threadReplies, [message.parentId]: [...replies, message] },
+          messagesByChannel: {
+            ...s.messagesByChannel,
+            [channelId]: bumpReplyCount(s.messagesByChannel[channelId] ?? [], message.parentId, 1),
+          },
+          channels: touchChannel(s.channels, channelId, message),
+        }
+      }
+      const list = s.messagesByChannel[channelId] ?? []
+      if (list.some((m) => m.id === message.id)) return {}
+      return {
+        messagesByChannel: { ...s.messagesByChannel, [channelId]: [...list, message] },
+        channels: touchChannel(s.channels, channelId, message),
+      }
+    })
+    // Clear typing indicator for me
+    get().handleTyping(channelId, message.sender?.id ?? 'me', '', undefined, true)
+  },
+
+  editMessage: async (messageId, body) => {
+    const data = await api<{ message: MessageDTO }>(`/api/messages/${messageId}`, {
+      method: 'PATCH',
+      body: { body },
+    })
+    get().handleMessageUpdated(data.message)
+    set({ editingMessageId: null })
+  },
+
+  deleteMessage: async (messageId) => {
+    await api(`/api/messages/${messageId}`, { method: 'DELETE' })
+    const { messagesByChannel } = get()
+    const entry = Object.entries(messagesByChannel).find(([, list]) =>
+      list.some((m) => m.id === messageId),
+    )
+    const channelId = entry?.[0]
+    if (channelId) get().handleMessageDeleted(messageId, channelId)
+    // also drop from thread replies if present
+    set((s) => {
+      const nextThreadReplies: Record<string, MessageDTO[]> = {}
+      for (const [rootId, replies] of Object.entries(s.threadReplies)) {
+        nextThreadReplies[rootId] = replies.map((r) =>
+          r.id === messageId ? { ...r, deletedAt: new Date().toISOString(), isPinned: false } : r,
+        )
+      }
+      return { threadReplies: nextThreadReplies }
+    })
+  },
+
+  toggleReaction: async (messageId, emoji) => {
+    const data = await api<{ reactions: ReactionDTO[] }>(`/api/messages/${messageId}/reactions`, {
+      method: 'POST',
+      body: { emoji },
+    })
+    const { messagesByChannel, threadReplies } = get()
+    for (const [channelId] of Object.entries(messagesByChannel)) {
+      if (messagesByChannel[channelId]?.some((m) => m.id === messageId)) {
+        get().handleReactionUpdated(channelId, messageId, data.reactions)
+      }
+    }
+    for (const [rootId, replies] of Object.entries(threadReplies)) {
+      if (replies.some((m) => m.id === messageId)) {
+        set((s) => ({
+          threadReplies: {
+            ...s.threadReplies,
+            [rootId]: replies.map((r) => (r.id === messageId ? { ...r, reactions: data.reactions } : r)),
+          },
+        }))
+      }
+    }
+  },
+
+  togglePin: async (messageId, pinned) => {
+    const data = await api<{ message: MessageDTO }>(`/api/messages/${messageId}/pin`, {
+      method: 'POST',
+      body: { pinned },
+    })
+    get().handleMessageUpdated(data.message)
+  },
+
+  // ── threads ────────────────────────────────────────────────────────────────
+  openThread: async (rootId) => {
+    set({ activeThreadRootId: rootId, threadLoading: true })
+    try {
+      const data = await api<{ replies: MessageDTO[] }>(`/api/messages/${rootId}/replies`)
+      set((s) => ({ threadReplies: { ...s.threadReplies, [rootId]: data.replies }, threadLoading: false }))
+    } catch {
+      set({ threadLoading: false })
+    }
+  },
+
+  closeThread: () => set({ activeThreadRootId: null, editingMessageId: null }),
+
+  // ── channel mutations ─────────────────────────────────────────────────────
+  createChannel: async (name, topic, kind, memberIds) => {
+    try {
+      const data = await api<{ id: string }>('/api/channels', {
+        method: 'POST',
+        body: { name, topic, kind, memberIds },
+      })
+      await get().fetchChannels()
+      await get().openChannel(data.id)
+      return data.id
+    } catch (err) {
+      throw err
+    }
+  },
+
+  createDm: async (userIds) => {
+    const data = await api<{ channel: ChannelDTO }>('/api/dms', { method: 'POST', body: { userIds } })
+    const channel = data.channel
+    set((s) => ({
+      channels: s.channels.some((c) => c.id === channel.id) ? s.channels : [...s.channels, channel],
+    }))
+    await get().openChannel(channel.id)
+    return channel.id
+  },
+
+  joinChannel: async (channelId) => {
+    await api(`/api/channels/${channelId}/join`, { method: 'POST' })
+    await get().fetchChannels()
+    await get().openChannel(channelId)
+  },
+
+  leaveChannel: async (channelId) => {
+    await api(`/api/channels/${channelId}/leave`, { method: 'POST' })
+    const wasActive = get().activeChannelId === channelId
+    await get().fetchChannels()
+    if (wasActive) {
+      const general = get().channels.find((c) => c.slug === 'general')
+      if (general) await get().openChannel(general.id)
+      else set({ activeChannelId: null })
+    }
+  },
+
+  addChannelMember: async (channelId, userId) => {
+    await api(`/api/channels/${channelId}/members`, { method: 'POST', body: { userId } })
+    await get().fetchChannels()
+  },
+
+  updateChannel: async (channelId, patch) => {
+    const data = await api<{ name: string; topic: string | null; isArchived: boolean }>(
+      `/api/channels/${channelId}`,
+      { method: 'PATCH', body: patch },
+    )
+    set((s) => ({
+      channels: s.channels.map((c) =>
+        c.id === channelId
+          ? { ...c, name: data.name, topic: data.topic, isArchived: data.isArchived }
+          : c,
+      ),
+    }))
+  },
+
+  setNotifyPrefs: async (channelId, patch) => {
+    // optimistic
+    set((s) => ({
+      channels: s.channels.map((c) => (c.id === channelId ? { ...c, ...patch } : c)),
+    }))
+    try {
+      await api(`/api/channels/${channelId}/members`, { method: 'PATCH', body: patch })
+    } catch {
+      await get().fetchChannels()
+    }
+  },
+
+  markChannelRead: (channelId, messageId) => {
+    set((s) => ({
+      channels: s.channels.map((c) =>
+        c.id === channelId ? { ...c, unread: 0, mentionCount: 0 } : c,
+      ),
+    }))
+    if (messageId) {
+      void api(`/api/channels/${channelId}/read`, { method: 'POST', body: { messageId } }).catch(
+        () => {},
+      )
+    }
+  },
+
+  setDraft: (channelId, text) => {
+    set((s) => {
+      const drafts = { ...s.drafts, [channelId]: text }
+      saveDrafts(drafts)
+      return { drafts }
+    })
+  },
+
+  updateMe: async (patch) => {
+    const user = await api<UserDTO>('/api/me', { method: 'PATCH', body: patch })
+    set((s) => ({
+      me: user,
+      users: s.users.map((u) => (u.id === user.id ? user : u)),
+    }))
+  },
+
+  markNotificationsRead: async (ids) => {
+    set((s) => ({
+      notifications: s.notifications.map((n) =>
+        !ids || ids.includes(n.id) ? { ...n, readAt: n.readAt ?? new Date().toISOString() } : n,
+      ),
+      notificationsUnread: 0,
+    }))
+    await api('/api/notifications', { method: 'POST', body: ids ? { ids } : {} })
+  },
+
+  emitTyping: (channelId) => {
+    const me = get().me
+    if (me) sendTyping(channelId, me.name)
+  },
+
+  // ── realtime handlers ──────────────────────────────────────────────────────
+  setConnected: (connected) => set({ connected }),
+  setPresenceList: (userIds) => {
+    const me = get().me
+    const presence: Record<string, boolean> = {}
+    for (const id of userIds) presence[id] = true
+    if (me) presence[me.id] = true
+    set({ presence })
+  },
+  setPresence: (userId, online) =>
+    set((s) => ({ presence: { ...s.presence, [userId]: online } })),
+
+  handleNewMessage: (message) => {
+    const me = get().me
+    set((s) => {
+      const isMine = !!me && message.sender?.id === me.id
+      // Thread reply
+      if (message.parentId) {
+        const replies = s.threadReplies[message.parentId]
+        const channels = touchChannel(s.channels, message.channelId, message)
+        if (!replies) {
+          return {
+            channels,
+            messagesByChannel: {
+              ...s.messagesByChannel,
+              [message.channelId]: bumpReplyCount(
+                s.messagesByChannel[message.channelId] ?? [],
+                message.parentId,
+                1,
+              ),
+            },
+          }
+        }
+        if (replies.some((r) => r.id === message.id)) return {}
+        return {
+          channels,
+          threadReplies: { ...s.threadReplies, [message.parentId]: [...replies, message] },
+          messagesByChannel: {
+            ...s.messagesByChannel,
+            [message.channelId]: bumpReplyCount(
+              s.messagesByChannel[message.channelId] ?? [],
+              message.parentId,
+              1,
+            ),
+          },
+        }
+      }
+
+      // Top-level message
+      const list = s.messagesByChannel[message.channelId]
+      const channels = touchChannel(s.channels, message.channelId, message)
+      if (!list) {
+        // Channel not loaded — bump unread counters instead
+        return {
+          channels: isMine
+            ? channels
+            : channels.map((c) =>
+                c.id === message.channelId && c.isMember
+                  ? { ...c, unread: c.unread + 1 }
+                  : c,
+              ),
+        }
+      }
+      if (list.some((m) => m.id === message.id)) return {}
+      const isActive = s.activeChannelId === message.channelId
+      const shouldCountUnread = !isMine && !isActive
+      return {
+        channels: shouldCountUnread
+          ? channels.map((c) =>
+              c.id === message.channelId && c.isMember ? { ...c, unread: c.unread + 1 } : c,
+            )
+          : channels,
+        messagesByChannel: { ...s.messagesByChannel, [message.channelId]: [...list, message] },
+      }
+    })
+    // Clear the sender's typing indicator
+    if (message.sender) {
+      get().handleTyping(message.channelId, message.sender.id, '', undefined, true)
+    }
+    // If channel is active but window hidden, mark unread for badge (skip — keep simple)
+  },
+
+  handleMessageUpdated: (message) => {
+    set((s) => {
+      const list = s.messagesByChannel[message.channelId]
+      return {
+        messagesByChannel: list
+          ? {
+              ...s.messagesByChannel,
+              [message.channelId]: replaceMessage(list, message.id, message),
+            }
+          : s.messagesByChannel,
+        threadReplies: Object.fromEntries(
+          Object.entries(s.threadReplies).map(([rootId, replies]) => [
+            rootId,
+            replaceMessage(replies, message.id, message),
+          ]),
+        ),
+      }
+    })
+  },
+
+  handleMessageDeleted: (id, channelId) => {
+    const now = new Date().toISOString()
+    set((s) => ({
+      messagesByChannel: {
+        ...s.messagesByChannel,
+        [channelId]: (s.messagesByChannel[channelId] ?? []).map((m) =>
+          m.id === id ? { ...m, deletedAt: now, isPinned: false, reactions: [], files: [] } : m,
+        ),
+      },
+    }))
+  },
+
+  handleReactionUpdated: (channelId, messageId, reactions) => {
+    set((s) => ({
+      messagesByChannel: {
+        ...s.messagesByChannel,
+        [channelId]: (s.messagesByChannel[channelId] ?? []).map((m) =>
+          m.id === messageId ? { ...m, reactions } : m,
+        ),
+      },
+    }))
+  },
+
+  handleTyping: (channelId, userId, name, kind, stop) => {
+    set((s) => {
+      const channelTyping = { ...(s.typing[channelId] ?? {}) }
+      if (stop) delete channelTyping[userId]
+      else channelTyping[userId] = { name: name || 'Someone', at: Date.now(), kind }
+      return { typing: { ...s.typing, [channelId]: channelTyping } }
+    })
+  },
+
+  handleNotification: (notification) => {
+    set((s) => ({
+      notifications: [notification, ...s.notifications].slice(0, 50),
+      notificationsUnread: s.notificationsUnread + 1,
+    }))
+  },
+
+  handleChannelsRefresh: async () => {
+    await get().fetchChannels()
+  },
+
+  // ── ui setters ─────────────────────────────────────────────────────────────
+  setSearchOpen: (open, seed = '') => set({ searchOpen: open, searchSeed: seed }),
+  setCreateChannelOpen: (open) => set({ createChannelOpen: open }),
+  setBrowseChannelsOpen: (open) => set({ browseChannelsOpen: open }),
+  setNewDmOpen: (open) => set({ newDmOpen: open }),
+  setSettingsOpen: (open) => set({ settingsOpen: open }),
+  setProfileUserId: (userId) => set({ profileUserId: userId }),
+  setImageViewer: (viewer) => set({ imageViewer: viewer }),
+  setDrawerOpen: (open) => set({ drawerOpen: open }),
+  setEditingMessageId: (id) => set({ editingMessageId: id }),
+  setJumpToMessageId: (id) => set({ jumpToMessageId: id }),
+}))
+
+// ── selectors (plain functions over getState) ────────────────────────────────
+
+export function getActiveChannel(state: ChatState): ChannelDTO | null {
+  return state.channels.find((c) => c.id === state.activeChannelId) ?? null
+}
+
+export function channelDisplayName(channel: ChannelDTO | null, meId: string | null): string {
+  if (!channel) return ''
+  if (channel.kind === 'dm') {
+    const others = channel.members ?? []
+    if (others.length === 1) return others[0].name
+    return 'Direct message'
+  }
+  if (channel.kind === 'group_dm') {
+    const others = (channel.members ?? []).map((m) => m.name.split(' ')[0])
+    return others.join(', ') || channel.name
+  }
+  return channel.name
+}

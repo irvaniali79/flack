@@ -1,0 +1,255 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Organization ────────────────────────────────────────────────────────────
+
+model Org {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  plan      String   @default("free")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users     User[]
+  channels  Channel[]
+  agents    Agent[]
+  workflows Workflow[]
+  auditLogs AuditLog[]
+}
+
+// ─── Users & Auth ────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  orgId        String
+  org          Org      @relation(fields: [orgId], references: [id])
+  email        String   @unique
+  name         String
+  passwordHash String
+  title        String?
+  timezone     String   @default("UTC")
+  avatarColor  String   @default("#e11d48")
+  // human | agent
+  kind         String   @default("human")
+  // owner | admin | member
+  role         String   @default("member")
+  statusEmoji  String?
+  statusText   String?
+  dndEnabled   Boolean  @default(false)
+  isActive     Boolean  @default(true)
+  externalId   String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  agent        Agent?
+  sessions     Session[]
+  memberships  ChannelMember[]
+  messages     Message[]
+  reactions    Reaction[]
+  files        File[]
+  notifications Notification[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+// ─── Channels & Membership ───────────────────────────────────────────────────
+
+model Channel {
+  id         String   @id @default(cuid())
+  orgId      String
+  org        Org      @relation(fields: [orgId], references: [id])
+  name       String
+  slug       String
+  topic      String?
+  // public | private | dm | group_dm
+  kind       String
+  isArchived Boolean  @default(false)
+  isDefault  Boolean  @default(false)
+  createdBy  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  members  ChannelMember[]
+  messages Message[]
+
+  @@unique([orgId, slug])
+}
+
+model ChannelMember {
+  id                String    @id @default(cuid())
+  channelId         String
+  channel           Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // owner | admin | member
+  role              String    @default("member")
+  lastReadMessageId String?
+  muted             Boolean   @default(false)
+  // all | mentions | none
+  notifyLevel       String    @default("all")
+  joinedAt          DateTime  @default(now())
+
+  @@unique([channelId, userId])
+}
+
+// ─── Messages, Threads, Reactions ────────────────────────────────────────────
+
+model Message {
+  id        String    @id @default(cuid())
+  channelId String
+  channel   Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  senderId  String?
+  sender    User?     @relation(fields: [senderId], references: [id], onDelete: SetNull)
+  body      String
+  // JSON string: { userIds: string[], specials: string[] }  ("@channel", "@here")
+  mentions  String?
+  parentId  String?
+  parent    Message?  @relation("Thread", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   Message[] @relation("Thread")
+  isPinned  Boolean   @default(false)
+  editedAt  DateTime?
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  reactions Reaction[]
+  files     File[]
+}
+
+model Reaction {
+  id        String   @id @default(cuid())
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emoji     String
+  createdAt DateTime @default(now())
+
+  @@unique([messageId, userId, emoji])
+}
+
+// ─── Files ───────────────────────────────────────────────────────────────────
+
+model File {
+  id         String    @id @default(cuid())
+  messageId  String?
+  message    Message?  @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  uploaderId String
+  uploader   User      @relation(fields: [uploaderId], references: [id])
+  name       String
+  mimeType   String
+  size       Int
+  // absolute or relative disk path of stored file
+  path       String
+  width      Int?
+  height     Int?
+  createdAt  DateTime  @default(now())
+}
+
+// ─── AI Agents (five facets) ─────────────────────────────────────────────────
+
+model Agent {
+  id               String   @id @default(cuid())
+  orgId            String
+  org              Org      @relation(fields: [orgId], references: [id])
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  handle           String   @unique
+  description      String?
+  // Responsibility / system prompt
+  systemPrompt     String
+  chatable         Boolean  @default(true)
+  model            String   @default("glm-4")
+  rateLimitPerHour Int      @default(20)
+  // Data scope: JSON string array of channel ids (null/empty = all channels agent is member of)
+  scopeChannelIds  String?
+  // Tasks/tools: JSON string array e.g. ["post_message","add_reaction","read_channel","search"]
+  tools            String?
+  invocations      Int      @default(0)
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+// ─── Workflows ───────────────────────────────────────────────────────────────
+
+model Workflow {
+  id           String   @id @default(cuid())
+  orgId        String
+  org          Org      @relation(fields: [orgId], references: [id])
+  name         String
+  description  String?
+  enabled      Boolean  @default(true)
+  // button | reaction | message_posted | webhook
+  triggerType  String
+  // JSON string with trigger config, e.g. { channelId, emoji, keyword }
+  triggerConfig String
+  // JSON string array of steps: [{ id, type, config, condition? }]
+  steps        String
+  createdBy    String?
+  runCount     Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  runs WorkflowRun[]
+}
+
+model WorkflowRun {
+  id           String    @id @default(cuid())
+  workflowId   String
+  workflow     Workflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  // running | done | failed
+  status       String    @default("running")
+  triggerLabel String?
+  // JSON string with trigger context (message, actor…)
+  context      String?
+  // JSON string array of logs: [{ step, label, status, detail, at }]
+  logs         String?
+  error        String?
+  startedAt    DateTime  @default(now())
+  finishedAt   DateTime?
+}
+
+// ─── Notifications & Audit ───────────────────────────────────────────────────
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // mention | mention_special | thread_reply | reaction | workflow
+  type      String
+  channelId String?
+  messageId String?
+  actorId   String?
+  body      String
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  orgId     String
+  org       Org      @relation(fields: [orgId], references: [id])
+  actorId   String?
+  action    String
+  target    String?
+  // JSON string with extra metadata
+  meta      String?
+  createdAt DateTime @default(now())
+}

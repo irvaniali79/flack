@@ -1,0 +1,277 @@
+'use client'
+import { useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
+import { AtSign, Clock, Mail, Pencil, Sparkles } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { cn } from '@/lib/utils'
+import { useChatStore } from '@/lib/store'
+import { localTimeIn, localTimezoneLabel } from '@/lib/time'
+import { UserAvatar } from '../avatar'
+import { PresenceDot } from '../presence-dot'
+
+const STATUS_EMOJIS = ['🎯', '☕', '🎨', '🚀', '🌴', '🧠', '🎧', '🏗️', '📋', '🔬', '💤', '🤖', '🔥', '🌱', '✈️', '🦁', '', '😀']
+
+const TIMEZONES = [
+  'UTC',
+  'America/Los_Angeles',
+  'America/Denver',
+  'America/Chicago',
+  'America/New_York',
+  'America/Sao_Paulo',
+  'Europe/London',
+  'Europe/Berlin',
+  'Europe/Madrid',
+  'Africa/Cairo',
+  'Asia/Dubai',
+  'Asia/Karachi',
+  'Asia/Kolkata',
+  'Asia/Shanghai',
+  'Asia/Tokyo',
+  'Australia/Sydney',
+]
+
+export function ProfileDialog() {
+  const profileUserId = useChatStore((s) => s.profileUserId)
+  const setProfileUserId = useChatStore((s) => s.setProfileUserId)
+  const me = useChatStore((s) => s.me)
+  const users = useChatStore((s) => s.users)
+  const presence = useChatStore((s) => s.presence)
+  const createDm = useChatStore((s) => s.createDm)
+  const updateMe = useChatStore((s) => s.updateMe)
+
+  const user = useMemo(() => users.find((u) => u.id === profileUserId) ?? null, [users, profileUserId])
+  const isSelf = !!user && user.id === me?.id
+
+  const [editing, setEditing] = useState(false)
+  const [name, setName] = useState('')
+  const [title, setTitle] = useState('')
+  const [statusEmoji, setStatusEmoji] = useState('')
+  const [statusText, setStatusText] = useState('')
+  const [timezone, setTimezone] = useState('UTC')
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    setEditing(false)
+    if (user) {
+      setName(user.name)
+      setTitle(user.title ?? '')
+      setStatusEmoji(user.statusEmoji ?? '')
+      setStatusText(user.statusText ?? '')
+      setTimezone(user.id === me?.id ? (me?.timezone ?? 'UTC') : (user.timezone ?? 'UTC'))
+    }
+  }, [profileUserId, user, me])
+
+  if (!user) return null
+
+  const open = !!profileUserId
+
+  const save = async () => {
+    setBusy(true)
+    try {
+      await updateMe({
+        name: name.trim() || undefined,
+        title: title.trim() || null,
+        statusEmoji: statusEmoji || null,
+        statusText: statusText.trim() || null,
+        timezone,
+      })
+      toast.success('Profile updated')
+      setEditing(false)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not save profile')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const myTimezone = editing ? timezone : (isSelf ? me?.timezone : user.timezone) || 'UTC'
+  const displayEmoji = editing ? statusEmoji : (user.statusEmoji ?? '')
+  const displayText = editing ? statusText : (user.statusText ?? '')
+  const userTz = user.timezone || 'UTC'
+
+  return (
+    <Dialog open={open} onOpenChange={(next) => !next && setProfileUserId(null)}>
+      <DialogContent className="overflow-hidden rounded-2xl p-0 sm:max-w-sm">
+        {/* banner */}
+        <div
+          className="h-20 w-full"
+          style={{
+            background: `linear-gradient(135deg, ${user.avatarColor}55 0%, transparent 60%), linear-gradient(225deg, #10b98144 0%, transparent 55%)`,
+          }}
+          aria-hidden
+        />
+        <div className="px-5 pb-5">
+          <div className="-mt-10 mb-3 flex items-end justify-between">
+            <div className="relative">
+              <UserAvatar user={user} size="xxl" className="ring-4 ring-background" />
+              {user.kind === 'human' && (
+                <PresenceDot online={presence[user.id]} className="absolute bottom-1 right-1 h-4 w-4" />
+              )}
+            </div>
+            {isSelf && !editing && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="mb-1 gap-1.5 rounded-lg"
+                onClick={() => setEditing(true)}
+              >
+                <Pencil className="h-3.5 w-3.5" aria-hidden /> Edit profile
+              </Button>
+            )}
+          </div>
+
+          {editing ? (
+            <div className="space-y-3.5">
+              <DialogHeader className="space-y-1 text-left">
+                <DialogTitle className="text-base">Edit your profile</DialogTitle>
+                <DialogDescription className="sr-only">Update your profile details</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-1.5">
+                <Label htmlFor="profile-name">Name</Label>
+                <Input id="profile-name" value={name} onChange={(event) => setName(event.target.value)} className="rounded-lg" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="profile-title">Title</Label>
+                <Input
+                  id="profile-title"
+                  placeholder="e.g. Product Designer"
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                  className="rounded-lg"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Status</Label>
+                <div className="flex flex-wrap gap-1">
+                  {STATUS_EMOJIS.map((emoji, index) => (
+                    <button
+                      key={index}
+                      type="button"
+                      aria-label={emoji ? `Status ${emoji}` : 'Clear status emoji'}
+                      onClick={() => setStatusEmoji(emoji)}
+                      className={cn(
+                        'flex h-8 w-8 items-center justify-center rounded-lg border text-base transition-colors duration-150',
+                        statusEmoji === emoji
+                          ? 'border-emerald-500/60 bg-emerald-500/10'
+                          : 'border-transparent hover:bg-accent',
+                      )}
+                    >
+                      {emoji || <span className="text-xs text-muted-foreground">none</span>}
+                    </button>
+                  ))}
+                </div>
+                <Input
+                  placeholder="What are you working on?"
+                  value={statusText}
+                  onChange={(event) => setStatusText(event.target.value)}
+                  className="rounded-lg"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Timezone</Label>
+                <Select value={myTimezone} onValueChange={setTimezone}>
+                  <SelectTrigger className="w-full rounded-lg">
+                    <SelectValue placeholder="Pick timezone" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-64 rounded-xl">
+                    {TIMEZONES.map((tz) => (
+                      <SelectItem key={tz} value={tz}>
+                        {localTimezoneLabel(tz)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex gap-2 pt-1">
+                <Button variant="outline" className="flex-1 rounded-lg" onClick={() => setEditing(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  disabled={busy}
+                  onClick={() => void save()}
+                  className="flex-1 rounded-lg bg-emerald-600 text-white hover:bg-emerald-500"
+                >
+                  {busy ? 'Saving…' : 'Save changes'}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <DialogHeader className="text-left">
+                <DialogTitle className="flex flex-wrap items-center gap-2 text-lg leading-tight">
+                  {user.name}
+                  {user.kind === 'agent' && (
+                    <span className="flex items-center gap-0.5 rounded bg-amber-500/15 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                      <Sparkles className="h-2.5 w-2.5" aria-hidden /> AI Agent
+                    </span>
+                  )}
+                  {user.role !== 'member' && (
+                    <span className="rounded bg-muted px-1.5 py-px text-[10px] font-bold uppercase text-muted-foreground">
+                      {user.role}
+                    </span>
+                  )}
+                </DialogTitle>
+                <DialogDescription className="flex items-center gap-2">
+                  {user.title ?? 'Team member'}
+                </DialogDescription>
+              </DialogHeader>
+
+              {(displayEmoji || displayText) && (
+                <p className="mt-3 rounded-lg bg-muted/60 px-3 py-2 text-sm">
+                  {displayEmoji} {displayText}
+                </p>
+              )}
+
+              <div className="mt-4 space-y-2 text-sm">
+                {user.email && (
+                  <p className="flex items-center gap-2 text-muted-foreground">
+                    <Mail className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    <span className="truncate">{user.email}</span>
+                  </p>
+                )}
+                {user.handle && (
+                  <p className="flex items-center gap-2 text-muted-foreground">
+                    <AtSign className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    <span className="truncate">{user.handle}</span>
+                  </p>
+                )}
+                <p className="flex items-center gap-2 text-muted-foreground">
+                  <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  {localTimeIn(userTz)} · {userTz.replace('_', ' ')}
+                </p>
+              </div>
+
+              {!isSelf && (
+                <Button
+                  className="mt-5 w-full rounded-lg bg-emerald-600 font-semibold text-white hover:bg-emerald-500"
+                  onClick={() => {
+                    setProfileUserId(null)
+                    void createDm([user.id])
+                  }}
+                >
+                  Message {user.name.split(' ')[0]}
+                </Button>
+              )}
+            </>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}

@@ -1,0 +1,333 @@
+'use client'
+import { useState } from 'react'
+import { useTheme } from 'next-themes'
+import { toast } from 'sonner'
+import { BellOff, Check, Clock, Mail, Monitor, Moon, Smile, Sun } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { cn } from '@/lib/utils'
+import { useChatStore } from '@/lib/store'
+import { localTimezoneLabel } from '@/lib/time'
+import { UserAvatar } from '../avatar'
+import { EmojiPicker } from '../emoji-picker'
+
+const TIMEZONES = [
+  'UTC',
+  'America/Los_Angeles',
+  'America/Denver',
+  'America/Chicago',
+  'America/New_York',
+  'America/Sao_Paulo',
+  'Europe/London',
+  'Europe/Berlin',
+  'Europe/Madrid',
+  'Africa/Cairo',
+  'Asia/Dubai',
+  'Asia/Karachi',
+  'Asia/Kolkata',
+  'Asia/Shanghai',
+  'Asia/Tokyo',
+  'Australia/Sydney',
+]
+
+const THEME_OPTIONS = [
+  { value: 'light', label: 'Light', description: 'Bright and crisp', icon: Sun },
+  { value: 'dark', label: 'Dark', description: 'Easy on the eyes', icon: Moon },
+  { value: 'system', label: 'System', description: 'Match your device', icon: Monitor },
+] as const
+
+export function SettingsDialog() {
+  const open = useChatStore((s) => s.settingsOpen)
+  const setOpen = useChatStore((s) => s.setSettingsOpen)
+  const me = useChatStore((s) => s.me)
+  const updateMe = useChatStore((s) => s.updateMe)
+  const { theme, setTheme } = useTheme()
+
+  // ── profile form (reset when the dialog is (re)opened) ─────────────────────
+  const [name, setName] = useState('')
+  const [title, setTitle] = useState('')
+  const [statusEmoji, setStatusEmoji] = useState('')
+  const [statusText, setStatusText] = useState('')
+  const [timezone, setTimezone] = useState('UTC')
+  const [busy, setBusy] = useState(false)
+  const [dndBusy, setDndBusy] = useState(false)
+  const [emojiOpen, setEmojiOpen] = useState(false)
+
+  const [lastOpen, setLastOpen] = useState(open)
+  if (open !== lastOpen) {
+    setLastOpen(open)
+    if (open && me) {
+      setName(me.name)
+      setTitle(me.title ?? '')
+      setStatusEmoji(me.statusEmoji ?? '')
+      setStatusText(me.statusText ?? '')
+      setTimezone(me.timezone ?? 'UTC')
+    }
+  }
+
+  if (!me) return null
+
+  const activeTheme = theme ?? 'dark'
+
+  const saveProfile = async () => {
+    if (busy) return
+    setBusy(true)
+    try {
+      await updateMe({
+        name: name.trim() || me.name,
+        title: title.trim() || null,
+        statusEmoji: statusEmoji || null,
+        statusText: statusText.trim() || null,
+        timezone,
+      })
+      toast.success('Profile updated')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not save profile')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const toggleDnd = async (next: boolean) => {
+    if (dndBusy) return
+    setDndBusy(true)
+    try {
+      await updateMe({ dndEnabled: next })
+      toast.success(next ? 'Do Not Disturb is on' : 'Do Not Disturb is off')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not update preference')
+    } finally {
+      setDndBusy(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent className="max-h-[85vh] gap-0 overflow-y-auto rounded-2xl p-0 sm:max-w-md">
+        <DialogHeader className="border-b border-border px-5 py-4">
+          <DialogTitle>Settings</DialogTitle>
+          <DialogDescription>
+            Manage your profile, notifications and appearance.
+          </DialogDescription>
+        </DialogHeader>
+
+        <Tabs defaultValue="profile">
+          <div className="px-5 pt-3">
+            <TabsList className="grid w-full grid-cols-3 rounded-xl">
+              <TabsTrigger value="profile" className="rounded-lg text-xs sm:text-sm">Profile</TabsTrigger>
+              <TabsTrigger value="notifications" className="rounded-lg text-xs sm:text-sm">Notifications</TabsTrigger>
+              <TabsTrigger value="appearance" className="rounded-lg text-xs sm:text-sm">Appearance</TabsTrigger>
+            </TabsList>
+          </div>
+
+          {/* ── Profile ──────────────────────────────────────────────────────── */}
+          <TabsContent value="profile" className="mt-4 space-y-4 px-5 pb-5">
+            <div className="flex items-center gap-3 rounded-xl border border-border bg-muted/30 p-3">
+              <UserAvatar user={me} size="lg" />
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold">{me.name}</p>
+                {me.email && (
+                  <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
+                    <Mail className="h-3 w-3 shrink-0" aria-hidden /> {me.email}
+                  </p>
+                )}
+                <p className="mt-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  {me.role} · Acme Inc
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="settings-name">Name</Label>
+              <Input
+                id="settings-name"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                className="rounded-lg"
+                placeholder="Your display name"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="settings-title">Title</Label>
+              <Input
+                id="settings-title"
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                className="rounded-lg"
+                placeholder="e.g. Product Designer"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Status</Label>
+              <div className="flex items-center gap-2">
+                <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      aria-label="Pick a status emoji"
+                      className="h-9 w-11 shrink-0 rounded-lg text-lg"
+                    >
+                      {statusEmoji || <Smile className="h-4 w-4 text-muted-foreground" aria-hidden />}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="start" className="w-72 rounded-xl p-0">
+                    <EmojiPicker
+                      onSelect={(char) => {
+                        setStatusEmoji(char)
+                        setEmojiOpen(false)
+                      }}
+                    />
+                    <div className="border-t border-border p-1.5">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-start gap-2 rounded-lg text-xs text-muted-foreground"
+                        onClick={() => {
+                          setStatusEmoji('')
+                          setEmojiOpen(false)
+                        }}
+                      >
+                        Clear emoji
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+                <Input
+                  value={statusText}
+                  onChange={(event) => setStatusText(event.target.value)}
+                  className="rounded-lg"
+                  placeholder="What are you working on?"
+                  aria-label="Status text"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="settings-timezone">Timezone</Label>
+              <Select value={timezone} onValueChange={setTimezone}>
+                <SelectTrigger id="settings-timezone" className="w-full rounded-lg">
+                  <SelectValue placeholder="Pick timezone" />
+                </SelectTrigger>
+                <SelectContent className="max-h-64 rounded-xl">
+                  {TIMEZONES.map((tz) => (
+                    <SelectItem key={tz} value={tz}>
+                      {localTimezoneLabel(tz)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="flex items-center gap-1.5 pt-0.5 text-[11px] text-muted-foreground">
+                <Clock className="h-3 w-3 shrink-0" aria-hidden />
+                Used to show your local time to teammates.
+              </p>
+            </div>
+
+            <Button
+              disabled={busy}
+              onClick={() => void saveProfile()}
+              className="w-full rounded-lg bg-emerald-600 font-semibold text-white hover:bg-emerald-500"
+            >
+              {busy ? 'Saving…' : 'Save profile'}
+            </Button>
+          </TabsContent>
+
+          {/* ── Notifications ────────────────────────────────────────────────── */}
+          <TabsContent value="notifications" className="mt-4 space-y-4 px-5 pb-5">
+            <div className="flex items-start gap-3 rounded-xl border border-border p-4">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                <BellOff className="h-4.5 w-4.5" aria-hidden />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-3">
+                  <Label htmlFor="settings-dnd" className="text-sm font-semibold">
+                    Do Not Disturb
+                  </Label>
+                  <Switch
+                    id="settings-dnd"
+                    checked={me.dndEnabled}
+                    disabled={dndBusy}
+                    onCheckedChange={(checked) => void toggleDnd(checked)}
+                    className="data-[state=checked]:bg-amber-500"
+                  />
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  While Do Not Disturb is on, new messages won&apos;t surface notifications or
+                  badges — your workspace stays quiet until you turn it off.
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-muted/50 p-3.5 text-xs leading-relaxed text-muted-foreground">
+              <p className="font-semibold text-foreground">Fine-grained control</p>
+              <p className="mt-1">
+                You can also set notification preferences per channel — hover a channel in the
+                sidebar or use the bell icon in the channel header to choose between all
+                messages, mentions only, or nothing.
+              </p>
+            </div>
+          </TabsContent>
+
+          {/* ── Appearance ───────────────────────────────────────────────────── */}
+          <TabsContent value="appearance" className="mt-4 space-y-3 px-5 pb-5">
+            <div className="space-y-1.5">
+              <Label>Theme</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {THEME_OPTIONS.map(({ value, label, description, icon: Icon }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={activeTheme === value}
+                    onClick={() => setTheme(value)}
+                    className={cn(
+                      'flex flex-col items-center gap-1.5 rounded-xl border p-3 text-center transition-all duration-150',
+                      activeTheme === value
+                        ? 'border-emerald-500/60 bg-emerald-500/5 ring-1 ring-emerald-500/40'
+                        : 'border-border hover:bg-accent',
+                    )}
+                  >
+                    <Icon
+                      className={cn(
+                        'h-5 w-5',
+                        activeTheme === value ? 'text-emerald-600' : 'text-muted-foreground',
+                      )}
+                      aria-hidden
+                    />
+                    <span className="text-sm font-semibold">{label}</span>
+                    <span className="text-[10px] leading-tight text-muted-foreground">
+                      {description}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              {activeTheme === 'system'
+                ? 'Acme Chat follows your operating system setting — switch it and the app follows along.'
+                : `You're viewing Acme Chat in ${activeTheme} mode.`}
+            </p>
+          </TabsContent>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
+  )
+}

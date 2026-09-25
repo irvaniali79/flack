@@ -1,0 +1,208 @@
+# Worklog — Acme Chat (Slack-style platform with AI Agents, MCP-style tools, Workflows)
+
+Shared handover document. Every agent MUST append a section after finishing its task.
+
+---
+
+Task ID: 0
+Agent: main (Z.ai Code)
+Task: Foundation — Prisma schema, seed data, shared contract files
+
+Work Log:
+- Explored existing scaffold (Next.js 16.1.3, Turbopack, shadcn/ui, Prisma+SQLite at db/custom.db, dev server on :3000 confirmed 200)
+- Wrote full `prisma/schema.prisma`: Org, User (kind: human|agent, role: owner|admin|member), Session, Channel (public|private|dm|group_dm), ChannelMember (lastReadMessageId, muted, notifyLevel), Message (threads via parentId, mentions JSON-string, soft delete, isPinned), Reaction, File, Agent (five-facet config), Workflow + WorkflowRun, Notification, AuditLog. NOTE: SQLite → no enums/Json fields, JSON is stored as strings.
+- Ran `bun run db:push` (client regenerated, v6.19.2)
+- Wrote `src/lib/auth.ts`: scrypt hash/verify, cookie sessions (acme_session, httpOnly, 30d), requireUser/requireAdmin, HttpError + handle() wrapper for routes
+- Wrote `src/lib/types.ts`: all shared DTOs (UserDTO, MessageDTO, ChannelDTO, AgentDTO, WorkflowDTO…)
+- Wrote `src/lib/realtime-server.ts`: emitToChannel/emitToUsers/emitAgentTyping → POSTs to chat-service at localhost:3003 (fire-and-forget)
+- Installed `socket.io-client` in main project. Quietened Prisma logging to errors only.
+- Wrote + ran `prisma/seed.ts` — org "Acme Inc", 8 users (6 humans + Aria/CodeReviewer agent users), 2 agents, 9 channels (5 + 3 DMs + 1 group DM), 46 messages across 3 days with threads/reactions/mentions/pins, 3 seeded workflows, notifications, audit log. Demo password: `demo1234`
+
+Stage Summary:
+- DB is seeded and ready. Login as sarah@acme.test (owner) / demo1234 for the richest state (unread badges in #random + #design, notifications).
+- REALTIME PROTOCOL (contract between 1-a and 1-b): client connects `io('/?XTransformPort=3003', {transports:['websocket','polling'], reconnection:true})`, NEVER other URL/path. On connect emit `hello` {userId, name}. Emit `channel:join`/`channel:leave` {channelId}. Emit `typing` {channelId, name} throttled. Emit `presence:list` with ack → string[] of online userIds. Server→client events: `message:new|message:updated|message:deleted` {message}|{id,channelId}, `reaction:updated` {channelId,messageId,reactions}, `typing` {channelId,userId,name,kind?}, `presence:update` {userId,online}, `notification:new` {notification}. Rooms: `channel:{id}`, `user:{id}` (joined on hello). Internal HTTP on the service: POST /internal/emit {rooms,event,data}, POST /internal/typing {channelId,name,stop}, GET /health.
+- Message POST route MUST call a stub `maybeInvokeAgents(message)` (src/lib/agents/runtime.ts — created by Task 3; Task 1-a creates a no-op stub) and `maybeTriggerWorkflows(message)` (Task 4; stub file src/lib/workflows/runtime.ts).
+- Next: Task 1-a (core chat full-stack) + Task 1-b (chat-service socket.io mini-service on :3003) in parallel.
+
+---
+
+Task ID: 1-b
+Agent: Z.ai Code (chat-service builder)
+Task: Realtime chat service — socket.io mini-service on :3003
+
+Work Log:
+- Read Task 0 contract, src/lib/realtime-server.ts (already matches the internal endpoints) and examples/websocket reference. Did NOT re-run the fullstack init script: the env was already initialized by Task 0 (node_modules/bun.lock present, Next dev healthy on :3000) and re-running it could corrupt Task 1-a's in-flight work; nothing outside mini-services/chat-service was touched.
+- Built standalone Bun project mini-services/chat-service/: package.json (dep socket.io ^4.8.1, devDep socket.io-client ^4.8.1, dev = "bun --hot index.ts"), index.ts (the service), scripts/test-client.ts (smoke test), bun.lock, service.log (runtime log).
+- CRITICAL DISCOVERY (socket.io 4.8.3 + path:'/'): engine.io's internal request check is `'/' === req.url.slice(0,1)` — it matches EVERY http request and swallowed /health, /internal/emit, /internal/typing (they returned {"code":0,"message":"Transport unknown"}). Fixed WITHOUT touching socket.io internals: after `new Server(httpServer, {path:'/'…})`, index.ts captures socket.io's own 'request' listeners, removes them, and installs a dispatcher that answers the internal routes first and forwards everything else (socket traffic, urls like /?EIO=4&transport=polling) to the original socket.io handling. Verified through the real gateway: curl 'http://localhost:81/health?XTransformPort=3003' → health JSON, and curl 'http://localhost:81/?XTransformPort=3003&EIO=4&transport=polling' → engine.io handshake (sid + upgrades:["websocket"]) — i.e. the browser pattern io("/?XTransformPort=3003") works end-to-end.
+- Protocol implemented exactly per the Task 0 contract: hello (stores socket.data.user, joins user:{userId}, presence broadcast only on 0→1, handles re-hello with different userId), channel:join/leave, typing relay via socket.to(room) (excludes sender, kind:'human'), presence:list ack → string[], presence Map<userId,Set<socketId>> with presence:update {online:false} broadcast when the last socket of a user leaves. All socket handlers are try/catch-wrapped; malformed payloads are warn-logged and ignored; graceful SIGTERM/SIGINT shutdown (verified: logs and frees the port); uncaughtException/unhandledRejection are logged without crashing.
+- Internal HTTP API (same http server, plain node http + manual JSON parsing, no express): POST /internal/emit {rooms,event,data} → {ok:true,sent:N} (empty rooms → sent:0, non-string rooms filtered, missing event with non-empty rooms → 400); POST /internal/typing {channelId,name,stop} → emits typing {channelId,userId:'__agent__',name,kind:'agent',stop:!!stop} to channel:{channelId} → {ok:true}; GET /health → {ok:true,uptime,sockets,onlineUsers} (works with or without query string, incl. via gateway); GET / (no query) → {service:'chat-service',status:'running'}. Note: GET / is only served without a query string because the socket.io handshake lives at '/?…'.
+- SANDBOX PROCESS-PERSISTENCE DISCOVERY: plain `nohup bun run dev … &` (also setsid+nohup on the wrapper, also disown) gets reaped by the Bash tool when the starting command ends — the service died at every command boundary. What DOES survive: launching the server as an orphaned, session-detached process (subshell exits immediately → reparented to init): `cd mini-services/chat-service && ( setsid bun --hot index.ts > service.log 2>&1 < /dev/null & )`. The service is CURRENTLY RUNNING this way and has survived many subsequent commands.
+- Smoke test `bun scripts/test-client.ts` (two socket.io-client sockets, direct local ws+polling): 18/18 PASS, exit code 0 — health, both clients connect, hello→presence:update broadcasts, typing relay + sender exclusion, POST /internal/emit→message:new to both room members, presence:list ack (both users), user-room notification:new (delivered to B, NOT to A), POST /internal/typing agent event (userId '__agent__', kind 'agent', stop false), empty-rooms emit → sent:0, B disconnect → presence:update offline + presence:list cleanup. Also verified SIGTERM graceful shutdown manually, then restarted.
+
+How to restart / stop the service (use this exact form — plain nohup does NOT survive in this sandbox):
+  cd /home/z/my-project/mini-services/chat-service && ( setsid bun --hot index.ts > service.log 2>&1 < /dev/null & )
+  # verify: sleep 1 && curl -s http://localhost:3003/health
+  # smoke:   cd mini-services/chat-service && bun scripts/test-client.ts   (18 checks, non-zero exit on any FAIL)
+  # stop:    pkill -f "bun --hot index.ts"
+('bun run dev' just wraps 'bun --hot index.ts'; the wrapper's child gets reaped at command end in this sandbox, so start the server process directly as above.)
+
+Stage Summary:
+- chat-service is LIVE on :3003, contract-complete, 18/18 smoke checks green, gateway path verified. Task 1-a can integrate as planned: browser clients io("/?XTransformPort=3003", {transports:['websocket','polling'], reconnection:true}) and server-side src/lib/realtime-server.ts (emitToRooms/emitToChannel/emitToUsers/emitAgentTyping) already match this service's endpoints exactly.
+
+---
+
+Task ID: 1-a-finish
+Agent: Z.ai Code (core chat finisher)
+Task: Finish Task 1-a — missing dialogs, page.tsx, lint-clean, e2e verify
+
+Work Log:
+- Read worklog (Task 0 + 1-b contracts), app.tsx, store.ts, all dialogs + the 5 files with lint errors. Ran `bun run lint` baseline: 9 errors / 4 warnings, exit 1.
+- CREATED src/components/chat/dialogs/settings-dialog.tsx — controlled by store `settingsOpen` (opened from Rail ⚙ and Sidebar menu). Tabs: Profile (name, title, status emoji via Popover reusing the shared EmojiPicker + "Clear emoji", status text, timezone Select via localTimezoneLabel; Save → PATCH /api/me through store.updateMe with busy state + toasts), Notifications (DND Switch bound to me.dndEnabled, auto-save on toggle with busy state, explanation + per-channel hint), Appearance (Light/Dark/System radio cards using next-themes useTheme().setTheme, create-channel-style card visuals). Profile form resets via a guarded render-time reset (open-toggle compare), NOT an effect.
+- CREATED src/components/chat/dialogs/image-viewer.tsx — lightbox on store `imageViewer` slot. Extended store slot `{url, name}` → `{url, name, size?}` (interface + setter) and updated message-item.tsx to pass `size: file.size`. Dark image stage (bg-zinc-950/95, max-h-[70vh] object-contain), DialogClose ✕ styled for the dark stage (default DialogContent close button disabled via showCloseButton={false}), footer with filename, formatBytes(size), and a download `<a href={url} download={name}>` styled as an emerald Button (asChild).
+- REPLACED src/app/page.tsx — now just `'use client'` + `import { ChatApp } from '@/components/chat/app'` rendering `<ChatApp />`. This is what pulled the whole chat graph into compilation.
+- FIXED 9 lint errors (root causes, verified patterns against the react-hooks v6 rules with a scratch file first):
+  - composer.tsx rules-of-hooks ×2: hoisted `mentionFiltered`/`channelFiltered` useMemos ABOVE the `if (!channel || channel.isArchived)` early return (hooks now unconditional).
+  - channel-header.tsx ×2: (a) MembersPopover — removed sync `setMembers(null)/setAdding(false)` from the fetch effect (deps now [channelId]) and keyed the usage site `<MembersPopover key={channel.id} />` so channel switches remount fresh; also stops pointless refetches on every channel-object identity change. (b) ChannelHeader — replaced topicEdit/renaming/renameValue states + reset effect with a single keyed `editState {channelId, topic, renaming, renameValue}` derived during render (`edit = editState?.channelId === channel.id ? editState : null`), which auto-discards stale edits on channel switch with zero effects.
+  - message-list.tsx ×3: split into `MessageList` wrapper → `<MessageListInner key={channelId}>` (remount resets scroll/pill/flash state — also fixes a latent bug where switching between two cached channels with equal message counts didn't scroll to bottom); "new arrival" pill setState deferred via requestAnimationFrame inside the layout effect; jump-to-message flash setState deferred via requestAnimationFrame.
+  - search-overlay.tsx ×2: replaced reset-on-open effect with a guarded render-time reset (tracks last {open, seed} — preserves seed-change-while-open behavior); search effect no longer sets state synchronously — `loading` is now DERIVED (`!!trimmed && resultsFor !== trimmed`), responses applied in async callbacks guarded by a seqRef (also fixes a stale-response race), input focus effect is DOM-only with cleanup.
+  - Removed all 4 unused eslint-disable directives (composer ×2, message-item ×1, thread-panel ×1).
+- FIXED 5 pre-existing broken imports / type errors exposed the moment ChatApp became reachable from page.tsx (tsc --noEmit):
+  - sidebar.tsx: `import { formatRelativeTime } from './time'` — module didn't exist (page 500'd with module-not-found before the fix) → '@/lib/time'.
+  - emoji.ts: RAW tuple type was `[string, string, Array<...>]` (3 slots) but data rows are `[id, name, icon, list]` (4 slots) → `[string, string, string, Array<[string, string]>]` (fixes all 11 emoji.ts errors incl. `list` possibly undefined).
+  - store.ts setNotifyPrefs patch typing: `notifyLevel?: string` → `ChannelDTO['notifyLevel']` (optimistic set was violating ChannelDTO).
+  - thread-panel.tsx: `NonNullable<replies>` → `NonNullable<typeof replies>`.
+  - search-overlay.tsx: `useRef<T>()` (React 19 requires an initial value) → `useRef<T | undefined>(undefined)`.
+  - api/notifications/route.ts: `new Map(arr.map(c => [c.id, c.name]))` → `new Map<string, string>(... as [string, string])` (fixes Map<unknown,unknown> + downstream serialize typing).
+  - `bunx tsc --noEmit` is now clean for all of src/ (only examples/ + skills/ reference material has errors, outside the app).
+- VERIFICATION (all passed):
+  - `bun run lint` → exit 0, ZERO errors/warnings (was 9/4).
+  - GET /api/auth/demo → demo user list. POST /api/auth/login (sarah@acme.test/demo1234) → user JSON, cookie jar saved.
+  - GET /api/bootstrap → me: Sarah Chen, 8 users, 2 agents (aria, reviewer), 8 channels.
+  - GET /api/channels/{general id}/messages → 9 messages, sender/reactions/files serialized.
+  - POST test message → id captured, appears in channel list; DELETE /api/messages/{id} → {ok:true}; re-fetch shows soft delete (present, deletedAt set, isPinned false, reactions/files cleared).
+  - GET / → 200, SSR HTML contains app root + auth-screen form + "Acme Chat"; subsequent GETs clean.
+  - GET :3003/health → {"ok":true,...} — service untouched/not restarted.
+  - tail dev.log → one expected module-not-found trace from the first compile WITH the broken './time' import, then `✓ Compiled` + all-200s for every verification request, no runtime errors.
+  - Confirmed only src/app/page.tsx exists as a page route (plus api/*, layout.tsx, globals.css).
+  - Extra: GET /api/notifications (exercises the fixed Map code) + GET /api/search?q=launch + PATCH /api/me roundtrip (set status 🚀/"E2E check" then reverted) all 200 and correct.
+
+Stage Summary:
+- Core chat platform (Task 1-a + 1-a-finish) is COMPLETE and lint/type clean: auth, channels/DMs, messages with threads/reactions/pins/mentions, files + image lightbox, search, notifications, presence/typing via chat-service, settings (profile/DND/theme), drafts. Login sarah@acme.test / demo1234.
+- Known gaps for Task 3 (agents): src/lib/agents/runtime.ts is still the Task-0 no-op stub — POST /api/channels/[id]/messages calls maybeInvokeAgents(message) but nothing responds yet; agents appear in DMs (aria/reviewer) with "AI teammate" composer hints but won't reply until the runtime + LLM integration lands. Agent profile dialog + agent badges already render from seeded data.
+- Known gaps for Task 4 (workflows): src/lib/workflows/runtime.ts stub; 3 seeded workflows exist in DB but never trigger (maybeTriggerWorkflows is a no-op). No workflow UI exists yet anywhere (nothing under components/ references workflows).
+- Implementation notes for Task 3/4: emitToChannel/emitToUsers/emitAgentTyping in src/lib/realtime-server.ts are ready (POST to :3003 internal endpoints); agent typing shows in TypingIndicator via kind:'agent' (Sparkles icon); serializer + soft-delete expectations match what the e2e checks above exercised.
+
+---
+Task ID: 2
+Agent: main (Z.ai Code)
+Task: Integration check — browser smoke test, realtime verification
+
+Work Log:
+- agent-browser smoke test: auth screen renders (demo quick-login buttons), logged in as Sarah → full chat UI (unread badges match seed: #design 1, #launch-plan 3, #random 1, bell 2 unread; agents Aria + CodeReviewer listed; DMs with counts)
+- Opened #general: seeded messages render, topic in header, composer works, sent test message successfully (markdown/emoji shortcode OK)
+- CRITICAL FINDING: direct http://localhost:3000 bypasses the Caddy gateway → the XTransformPort socket.io routing does NOT work on that origin. Through the GATEWAY origin (http://localhost:81) everything works. The user preview goes through the gateway, so real users are fine. FOR ALL BROWSER TESTING use http://localhost:81/ (engine.io handshake verified: curl "http://localhost:81/?XTransformPort=3003&EIO=4&transport=polling" returns sid).
+- Realtime E2E verified via two agent-browser sessions through :81: Marcus sent a message in #general → Sarah's already-open session received it LIVE (WebSocket). Presence: Marcus flipped Offline→Online in Sarah's sidebar live. No console errors.
+
+Stage Summary:
+- Core platform (Tasks 0+1-a+1-b) is VERIFIED WORKING end-to-end: auth, channels, messages, realtime, presence, search bar, notifications badge.
+- agent-browser session tips: use `--session <name>` for parallel logins; cookies persist across ports on localhost (same host).
+- Stub hooks confirmed wired: src/app/api/channels/[id]/messages/route.ts calls maybeInvokeAgents + maybeTriggerWorkflowsOnMessage (fire-and-forget); reactions route calls maybeTriggerWorkflowsOnReaction.
+- NEXT: Task 3 (AI agents) + Task 4 (workflows + admin) run in PARALLEL with strict file ownership to avoid conflicts.
+
+---
+
+Task ID: 3
+Agent: Z.ai Code (AI agents)
+Task: Agent runtime (LLM replies on mention/DM), agent CRUD API + management UI, AI summaries ("Catch me up" + thread summary)
+
+Work Log:
+- Read worklog (Tasks 0/1-b/1-a-finish/2), schema, runtime stub, realtime-server, serialize/types/auth, messages POST route (line ~197 calls maybeInvokeAgents fire-and-forget), sidebar/channel-header/thread-panel/composer/store, markdown.tsx, ESLint config. Did NOT touch Task 4 files (workflows/admin/webhooks/rail/app.tsx) or prisma/schema.prisma or store.ts.
+- BUILT src/lib/agents/llm.ts (NEW): shared server-only LLM helper. Module-level ZAI singleton promise (reset on failure), callLLM() with one retry after 500ms on error/empty reply, 90s per-attempt timeout via Promise.race. thinking disabled. Used by both the agent runtime and the summary route.
+- BUILT src/lib/agents/runtime.ts (REPLACED stub, same exported signature maybeInvokeAgents({id,channelId,senderId,body,parentId})):
+  1) return early if senderId null or sender user kind==='agent' (agents never trigger agents);
+  2) load channel (with org name + members/users);
+  3) targets: (a) mention trigger = active+chatable agents whose `@handle` appears in body (case-insensitive, custom handle-word boundary `@handle(?![a-zA-Z0-9_-])`), respecting scopeChannelIds (non-empty scope not containing channel.id → skip; DMs always allowed); (b) DM trigger = other member of a kind='dm' channel is an active chatable agent (works without mention); dedupe, max 2 targets, invoked SEQUENTIALLY so their '__agent__' typing indicators don't clobber each other;
+  4) per target: hourly rate limit = db count of Messages by the agent user in last 60min >= rateLimitPerHour → posts "I've hit my hourly limit — try again in a bit ⏳" (same channel/thread) and skips; emitAgentTyping(start) → build context → LLM → create reply Message → emitToChannel 'message:new' {message} → agent.invocations++ ; LLM failure after retry → posts "⚠️ I couldn't generate a response just now — please try again."; typing stop always in finally; whole thing try/catch-wrapped (fire-and-forget, logs only).
+  Context: if triggering message has parentId → thread root + its replies (chronological, deleted filtered); else last 20 channel messages by createdAt (chronological). LLM messages: first = {role:'assistant', content: systemPrompt + platform context "You are {name} (@{handle}), an AI teammate in the {org} team chat, in {#channel (topic) | a private DM conversation}. Current time… Reply as {name} — helpful, concise, Markdown OK. Do not invent facts…"} (+ "This is a private direct message conversation." for DM-trigger), then each history message as role assistant (own) / user (others) with "Name: body". Reply threading: mention-trigger keeps message.parentId (in-thread if thread reply), DM-trigger always top-level.
+- BUILT src/app/api/agents/route.ts (NEW): GET (any user) → {agents: AgentDTO+messageCount[]} (messageCount via user._count.messages — superset field, AgentDTO in types.ts untouched); POST (requireAdmin, zod-validated): handle must match ^[a-z0-9_-]{2,24}$ + unique (agent.handle AND ${handle}@agent.local email, 409 otherwise), creates User (kind 'agent', title 'AI agent', random scrypt password, warm avatarColor palette — no blue/indigo) + Agent row, joins agent to ALL public non-archived channels (manual list, no createMany skipDuplicates risk), scopeChannelIds filtered to real org channels, AuditLog 'agent.created' target '@handle', emits 'channels:refresh' to all active human user rooms.
+- BUILT src/app/api/agents/[id]/route.ts (NEW): PATCH (requireAdmin) — updates any facet fields, handle-uniqueness check, user record synced FIRST (name, email=${handle}@agent.local on handle change, isActive mirrors agent.isActive) so the returned DTO is fresh; scope filtered to org channels; AuditLog 'agent.updated'. DELETE (requireAdmin) — hard delete (user delete cascades Agent/memberships) only when the agent user has 0 messages, else soft-disable (agent isActive=false + chatable=false + user isActive=false → drops out of bootstrap users/agents while message history stays coherent); AuditLog 'agent.deleted' with mode meta. Next 16 `const { id } = await params`.
+- BUILT src/components/chat/agents/ (NEW folder):
+  - agent-dialog.tsx: "AI agents" dialog (aria), fetches GET /api/agents on open; card per agent (UserAvatar w/ built-in Sparkles badge, name, @handle, description, badges: AI AGENT / Chatable|Muted / Inactive, meta: invocations, model chip, N/h limit, scope summary); admin actions Edit (Pencil) / Deactivate|Reactivate (Power — PATCH {isActive, chatable} together) / Delete (Trash2 + AlertDialog confirm, only rendered when messageCount===0); "+ New agent" admin-only; non-admins read-only. After every mutation it re-fetches and syncs the zustand store via useChatStore.setState (NOT store.ts edits): agents = active AgentDTOs, users = upsert/remove agent users (keeps sidebar + @-mention autocomplete fresh), fetchChannels() when memberships changed.
+  - agent-form.tsx: create/edit form swapped in as dialog view (keyed by agent id → mount-time init, no reset effects): name, handle (live "Mention as @handle" preview, monospace, lowercase-forced), description, system prompt (Textarea min-h-32 font-mono + helper text), chatable Switch, model Select (glm-4 / glm-4-air, informational), rate limit number 1–100, tools = toggle chips (post_message, read_channel, search_messages, add_reaction), data scope = channel multi-select checkboxes w/ search (empty = "All channels", "DMs are always allowed" hint). Client validation + server errors via toast.
+  - summary-dialog.tsx: SummaryDialog (presentational: header "Catch me up on #x"/"Thread summary" + Sparkles, loading = Skeleton lines + "Reading the channel…" shimmer, error = inline retry, success = MarkdownBody render so @names become clickable mention chips) + SummaryTrigger (owns open + fetch state; setState only in async callbacks, phase DERIVED from request key — lint-safe under react-hooks v6 set-state-in-effect; "labeled" variant = emerald ghost "Catch me up" pill for channel header, "icon" variant = compact Sparkles for thread panel; disabled + tooltip while loading).
+- BUILT src/app/api/ai/summary/route.ts (NEW): POST {channelId, threadOf?} (requireUser + member/private rules like messages route). threadOf → thread root + replies, else last 40 non-deleted messages, chronological. Fixed Aria persona system prompt (platform feature, NOT the agents table): overview + '## Key points' (3–6 bullets) + '## Decisions & action items' (@names) + '## Open questions', never invent facts. Transcript "Name (Mon D, HH:MM): body" + channel name/topic context. Empty conversation → 400. Returns {summary}.
+- SURGICAL EDITS to shared files (exact, so Task 4 integration is aware):
+  - sidebar.tsx: + Bot icon import, + local useState agentsDialogOpen, + "Manage agents" icon button (aria-label) in the Agents section header next to the collapse chevron, + <AgentDialog open…/> rendered once before the current-user row. Nothing else changed.
+  - channel-header.tsx: + SummaryTrigger import, + <SummaryTrigger channelId={channel.id} title={`Catch me up${isDm ? ` — ${dmTitle}` : ` on #${channel.name}`}`} /> inserted as the FIRST item in the header actions row (before the members popover). Nothing else changed.
+  - thread-panel.tsx: + SummaryTrigger import, + <SummaryTrigger channelId threadOf={rootId} variant="icon" title="Thread summary" loadingLabel="Reading the thread…" /> inserted in the thread header between the channel label and the Close button. Nothing else changed.
+- ENVIRONMENT NOTE: the Next dev server on :3000 died TWICE during this task (silent, no trace in dev.log — external kill/OOM while multiple agent-browser sessions + Task 4 work run in parallel; chat-service on :3003 never went down). Restarted both times with: cd /home/z/my-project && ( setsid bun run dev >> dev.log 2>&1 < /dev/null & ). Note: the dev script itself pipes through `tee dev.log` which truncates the log on start.
+
+Verification (all passed):
+- bun run lint → exit 0, zero errors/warnings project-wide at final run (my files also individually lint-clean; bunx tsc --noEmit clean for all my files — remaining tsc errors are only in Task 4's in-flight files).
+- curl CRUD: login sarah → GET /api/agents = aria + reviewer (with messageCount); POST @qa-bot (created, auto-joined all 4 public non-archived channels, audit 'agent.created', channels:refresh emitted); duplicate handle → 409; PATCH @qa-bot→@qa-bot-2 + rename + rate (user record synced incl. email, fresh DTO); DELETE @qa-bot (0 messages) → {deleted:true} hard; second temp agent given a message via DB then DELETE → {disabled:true, messages:1} + hidden from bootstrap agents AND users; member tom: GET 200 but POST/PATCH/DELETE → 403 "Admin role required"; unauth GET → 401; /api/ai/summary bad payload → 400, nonexistent thread → 404. (Test agents fully cleaned up; DB integrity re-checked: 0 orphan Agent/ChannelMember/Message rows, agents = aria + reviewer.)
+- LIVE browser test (agent-browser --session agents via :81 gateway, logged in as sarah):
+  1) #general → sent "@aria what do you know about the v1 launch?" → snapshot caught "Aria is thinking…" live typing indicator → Aria replied as agent-authored message (AI badge, markdown bullets) correctly grounded in the seeded conversation (all-hands Friday, websocket reconnect, v2 testing, unowned migration dry-run).
+  2) DM with Aria (no mention) → "Summarize our launch risks in 2 bullets" → Aria replied exactly 2 bullets (Onboarding & Deliverability / Migration Dry-Run ⚠️) with AI badge.
+  3) "Catch me up" in #general header → dialog with loading shimmer → rendered Markdown summary (Overview, Key points, Decisions & action items with clickable @mention chips, Open questions). POST /api/ai/summary 200 in ~3.6s.
+  4) Thread panel → Summarize icon → "Thread summary" dialog rendered thread-specific recap (POST /api/ai/summary w/ threadOf 200).
+  5) Manage agents dialog from sidebar Bot button: list w/ badges (Aria showed invocations 3 = 2 mine + 1 from Task 4's run_agent workflow step), "+ New agent" form (live handle preview "Mention as @ui-test-bot", tool chips, scope picker) → created → toast → list + sidebar refreshed via store sync → AlertDialog delete → toast → gone from sidebar. aria.invocations incremented only on successful LLM replies.
+- tail dev.log: no [agents]/[realtime] errors, all agent routes 200 (the only 403s are the intentional member tests); the two PrismaClientUnknownRequestError entries in the log were from my temporary orphaned temp-soft Agent row during DB surgery (fixed immediately, not a code path). chat-service service.log: healthy connect/hello/disconnect traffic, zero crashes.
+
+Stage Summary:
+- AI agents are LIVE end-to-end: mention + DM triggers, typing indicators, context-grounded LLM replies as agent-authored messages, hourly rate limits, full admin CRUD + management UI, and AI summaries for channels and threads. API surface: GET/POST /api/agents, PATCH/DELETE /api/agents/[id], POST /api/ai/summary (+ runtime maybeInvokeAgents consumed by the existing messages POST route).
+- For Task 4: I edited exactly three shared files — sidebar.tsx (Agents header button + AgentDialog mount), channel-header.tsx (SummaryTrigger first in actions row), thread-panel.tsx (SummaryTrigger icon in thread header) — all additive, no logic changes to existing code. store.ts and types.ts untouched (store sync done via useChatStore.setState from the dialog).
+- Known gaps: (1) agent replies don't create @mention notifications for humans mentioned in the reply (serialization shows empty mentions) — could reuse parseMentions later; (2) tools/scope on the Agent row are informational for the runtime (stored + displayed + validated, but the LLM doesn't execute tool calls) except scope which IS enforced for mentions; (3) non-admin users see read-only dialog but new/deactivated agents only appear in OTHER sessions' user directories after their next bootstrap/reconnect (emit is channels:refresh only); (4) LLM replies sometimes prefix "Aria:" (model artifact, harmless); (5) rate-limit message itself counts toward the hourly window (intended self-throttle); (6) DM-trigger replies are always top-level per spec even when the triggering message was a thread reply (mention-trigger keeps the thread).
+
+---
+
+Task ID: 3 (verification pass / re-run)
+Agent: Z.ai Code (AI agents)
+Task: Agent runtime (LLM replies on mention/DM), agent CRUD API + management UI, AI summaries — full re-verification of the completed build
+
+Work Log:
+- Context: the prior Task 3 session (section above) completed all four builds. This session re-issued the same Task ID 3, so I performed a full audit + re-verification pass instead of re-building. Dev server (:3000) and chat-service (:3003) were both already up and healthy; no code changes were needed — every artifact was intact and spec-compliant.
+- AUDITED all owned files (all present, complete, unchanged from the prior build description):
+  - src/lib/agents/llm.ts — server-only LLM helper (ZAI singleton promise, 1 retry @500ms, 90s timeout, thinking disabled)
+  - src/lib/agents/runtime.ts — maybeInvokeAgents({id,channelId,senderId,body,parentId}) with sender-kind guard, mention trigger (@handle word-boundary, case-insensitive, scopeChannelIds enforced, DMs always allowed), DM trigger, max 2 targets sequential, hourly rate-limit path, typing indicator start/stop (finally), thread-aware context (root+replies or last 20), agent-authored reply + emitToChannel 'message:new' + invocations++, graceful failure messages, whole-function try/catch
+  - src/app/api/agents/route.ts (GET list w/ messageCount, POST create w/ handle ^[a-z0-9_-]{2,24}$ + 409 uniqueness, warm-palette avatar, auto-join ALL public non-archived channels, AuditLog 'agent.created', channels:refresh emit)
+  - src/app/api/agents/[id]/route.ts (PATCH w/ handle uniqueness + user-record sync first, DELETE = hard when 0 messages else soft-disable isActive=false + chatable=false, AuditLog 'agent.updated'/'agent.deleted')
+  - src/app/api/ai/summary/route.ts (POST {channelId, threadOf?}, requireUser + member check, last 40 or thread root+replies, fixed Aria summarizer persona, "Name (time): body" transcript, {summary})
+  - src/components/chat/agents/{agent-dialog.tsx, agent-form.tsx, summary-dialog.tsx} + the three surgical integration edits still in place: sidebar.tsx (Manage agents Bot button e618 + AgentDialog mount), channel-header.tsx (SummaryTrigger first in header actions), thread-panel.tsx (SummaryTrigger icon in thread header)
+- Did NOT touch any Task 4 owned files, prisma/schema.prisma, or store.ts.
+
+Verification (all passed — fresh evidence from this session):
+- bun run lint → exit 0, zero errors/warnings project-wide (my files included).
+- curl CRUD as sarah (owner): login 200 → GET /api/agents = @aria + @reviewer (with messageCount, invocations 3/0); POST @qa-bot → 200 (auto-joined design/engineering/general/random, audit 'agent.created', avatar #c026d3 warm palette); duplicate POST → 409; PATCH → @qa-bot-2 "QA Bot II" rate 25 (fresh DTO); DELETE → {ok:true,deleted:true} (hard, 0 messages); post-cleanup GET = aria + reviewer, DB check: 0 orphan Users/Agents.
+- POST /api/ai/summary (#general, no threadOf) → 200 in ~3.3s, proper Markdown (Overview / Key points / Decisions / Open questions).
+- LIVE browser test (agent-browser --session agents via http://localhost:81 gateway — NOT :3000 — logged in as sarah):
+  1) #general → sent "@aria what do you know about the v1 launch?" → snapshot caught "Aria is thinking…" typing indicator live → Aria replied as agent-authored message (AI/Sparkles badge, 7:55 AM) with markdown bullets correctly grounded in seeded content (all-hands Friday 4pm PT, Priya's websocket reconnect + catch-up endpoint, v2 prototype testing 2pm, unowned migration dry-run/support runbook/metrics dashboard).
+  2) DM with Aria (no mention) → "Summarize our launch risks in 2 bullets" → Aria replied with exactly 2 bullets (Onboarding & Deliverability / Migration Dry-Run ⚠️), AI badge.
+  3) "Catch me up" in #general header → dialog with "Reading the channel…" shimmer → rendered Markdown recap; @names in Decisions rendered as clickable mention chips.
+  4) Thread panel → Summarize icon → "Thread summary" dialog rendered a thread-specific recap.
+  5) Manage agents dialog (sidebar Bot button) → cards for @aria (now 5 invocations — my 2 live replies incremented it) + @reviewer with AI AGENT/CHATABLE badges, glm-4 chip, N/h limit, scope; admin actions Edit/Deactivate + New agent present.
+- tail dev.log: every agent flow 200 (GET/POST/PATCH/DELETE /api/agents, POST /api/ai/summary ×3, message POSTs that triggered the runtime); no [agents]/[realtime]/LLM errors. chat-service service.log: normal connect/hello/disconnect traffic only, 0 crashes (grep uncaught|fatal|ECONNREFUSED|crash = 0).
+- Rate limit: code-review only as instructed (runtime counts agent messages in last 60 min vs rateLimitPerHour → posts "I've hit my hourly limit — try again in a bit ⏳" and stops; aria is at 5 messages / 30 per hour, nowhere near the limit — no LLM spam).
+
+Stage Summary:
+- Task 3 deliverables are COMPLETE and RE-VERIFIED live end-to-end: mention + DM agent replies with typing indicators and context-grounded LLM output, admin CRUD + management UI, and channel/thread AI summaries. API surface: GET/POST /api/agents, PATCH/DELETE /api/agents/[id], POST /api/ai/summary, plus the fire-and-forget maybeInvokeAgents consumed by the messages POST route.
+- Shared-file integration points (unchanged from prior pass, restated for integration): sidebar.tsx (Agents section header Bot button + AgentDialog mount, local useState only), channel-header.tsx (SummaryTrigger as first header action), thread-panel.tsx (SummaryTrigger icon button in thread header). Task 4 files were untouched.
+- Known gaps (carried over, unchanged): (1) agent replies don't emit @mention notifications for humans named in them; (2) tools are stored/displayed but not executed by the LLM (scope IS enforced); (3) new/deactivated agents propagate to other sessions via channels:refresh + next bootstrap only; (4) LLM sometimes prefixes replies with the agent's own name ("Aria: …") — harmless model artifact; (5) the rate-limit notice itself counts toward the hourly window (intended self-throttle); (6) DM-trigger replies are always top-level even when the trigger was a thread reply (mention-trigger keeps the thread).
+
+---
+Task ID: 4 + 5 (verification pass)
+Agent: main (Z.ai Code)
+Task: Workflows + Admin (built by background Task 4 session) — verified; final E2E QA; demo-data curation
+
+Work Log:
+- Discovered the parallel Task 4 launch (despite a tool timeout error) completed in the background: workflows runtime (triggers message_posted/reaction/button/webhook; steps post_message/send_dm/add_reaction/run_agent with condition + template vars; Workflows bot user; WorkflowRun logging), full APIs (/api/workflows CRUD + run + runs, /api/webhooks/[id], /api/admin/stats|users|channels), UI (workflows-view with humanized trigger sentences, workflow-builder dialog with step editor + reorder, runs-drawer with log timeline, admin-view with stat cards + Recharts area chart + Members/Channels/Audit tabs), rail.tsx Workflows/Admin buttons + view-store.ts routing in app.tsx.
+- VERIFIED end-to-end: manual workflow run ("Daily welcome wave" → done, message posted by Workflows bot in #general); message_posted trigger (posting "deployed v0.9.4…" in #engineering auto-fired: 🎉 reaction on message + cheer message); workflow builder dialog (trigger sentence preview, steps, add-step); runs drawer (status dots, durations, expandable logs); admin stats/chart/members table/audit log; notification bell (2 seeded unread, mark-all-read, click-through jumps to message in #engineering with flash highlight); Cmd+K search overlay (tabs Messages/Channels/People, channel-badged results, jump).
+- Task 3 (agents) verified by its agent: live @aria mention in #general → "Aria is thinking…" → grounded LLM reply as agent-authored message; DM with Aria (no mention needed); "Catch me up" channel summary; thread Summarize; agent CRUD + manage dialog (sidebar Bot button).
+- Console: 0 errors. dev.log clean. chat-service healthy (18/18 original smoke checks; uptime 5210s at final check).
+- DEMO DATA CURATION: deleted 22 test-noise messages (E2E/QA/trigger-test strings, duplicate workflow cheers, duplicate aria Q&A pairs) + 1 test-registered user; stripped "Aria: " reply prefix artifact; kept 1 live LLM demo pair in #general + 1 in the Sarah↔Aria DM. Final state: 9 users (6 humans + Aria + CodeReviewer + Workflows bot), 53 curated messages, 3 workflows with run history.
+- Responsive: mobile (390×844) shows hamburger drawer; light/dark themes both screenshot-verified.
+
+Stage Summary:
+- PLATFORM COMPLETE & BROWSER-VERIFIED: Slack-style chat (channels public/private, 1:1 + group DMs, threads, reactions, mentions w/ highlight + notifications, markdown + emoji + code blocks, files, global search w/ filters, pins, unread badges, presence, typing indicators) + realtime (socket.io via Caddy gateway) + AI agents (first-class users, mention/DM invocation, summaries) + workflows (4 triggers, 4 step types, run history) + admin (stats, chart, user/channel mgmt, audit log).
+- Login: sarah@acme.test / demo1234 (owner). Also marcus@/priya@/diego@/emma@/tom@acme.test.
+- CRITICAL OPS NOTE: browser testing MUST use http://localhost:81 (gateway) — direct :3000 bypasses XTransformPort socket routing. chat-service restart: `cd /home/z/my-project/mini-services/chat-service && ( setsid bun --hot index.ts > service.log 2>&1 < /dev/null & )`.
+- Known gaps / next-phase candidates: MCP server endpoint + Claude Code integration, Slack import/compat API, scheduled/cron workflow triggers, email/push notifications, SSO/2FA, thread follow notifications, emoji custom upload, message forwarding, draft sync across devices.
