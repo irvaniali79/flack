@@ -103,6 +103,8 @@ model Channel {
   isArchived Boolean  @default(false)
   isDefault  Boolean  @default(false)
   createdBy  String?
+  // Slack export import: the source channel id ("C123…") — used for idempotent re-import
+  externalId String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -146,6 +148,8 @@ model Message {
   isPinned  Boolean   @default(false)
   editedAt  DateTime?
   deletedAt DateTime?
+  // Slack export import: the source message ts ("1234567890.000100") — used for idempotent re-import
+  externalId String?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 

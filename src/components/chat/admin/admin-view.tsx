@@ -63,6 +63,7 @@ import { useChatStore } from '@/lib/store'
 import { useViewStore } from '@/lib/view-store'
 import { formatRelativeTime } from '@/lib/time'
 import type { UserDTO } from '@/lib/types'
+import { SlackImportSection } from './slack-import-section'
 import { UserAvatar } from '../avatar'
 import { cn } from '@/lib/utils'
 
@@ -400,6 +401,7 @@ export function AdminView() {
               <TabsList className="rounded-xl">
                 <TabsTrigger value="members" className="rounded-lg">Members</TabsTrigger>
                 <TabsTrigger value="channels" className="rounded-lg">Channels</TabsTrigger>
+                <TabsTrigger value="import" className="rounded-lg">Import</TabsTrigger>
                 <TabsTrigger value="audit" className="rounded-lg">Audit log</TabsTrigger>
               </TabsList>
 
@@ -602,6 +604,11 @@ export function AdminView() {
                     </div>
                   )}
                 </div>
+              </TabsContent>
+
+              {/* Slack import */}
+              <TabsContent value="import" className="mt-4">
+                <SlackImportSection />
               </TabsContent>
 
               {/* audit log */}
