@@ -7,8 +7,10 @@ import {
   Bot,
   ChevronRight,
   Hash,
+  KeyRound,
   Loader2,
   MessageSquare,
+  ShieldCheck,
   Sparkles,
   Workflow,
   Zap,
@@ -25,6 +27,7 @@ interface DemoUser {
   title: string | null
   avatarColor: string
   role: string
+  totpEnabled?: boolean
 }
 
 const FEATURES = [
@@ -54,6 +57,7 @@ function initials(name: string) {
 export function AuthScreen() {
   const login = useChatStore((s) => s.login)
   const register = useChatStore((s) => s.register)
+  const verify2fa = useChatStore((s) => s.verify2fa)
 
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [email, setEmail] = useState('')
@@ -62,6 +66,10 @@ export function AuthScreen() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [demoUsers, setDemoUsers] = useState<DemoUser[]>([])
+  // ── two-factor step (set when the password step returns a challenge) ──────
+  const [challenge, setChallenge] = useState<{ challengeId: string; email: string } | null>(null)
+  const [code, setCode] = useState('')
+  const [recoveryMode, setRecoveryMode] = useState(false)
 
   useEffect(() => {
     fetch('/api/auth/demo')
@@ -75,11 +83,40 @@ export function AuthScreen() {
     setError(null)
     setBusy(true)
     try {
-      if (mode === 'login') await login(email, password)
-      else await register(email, name, password)
+      if (mode === 'login') {
+        const result = await login(email, password)
+        if (result && result.requires2fa) {
+          // Password accepted — now the authenticator code
+          setChallenge({ challengeId: result.challengeId, email: result.email })
+          setCode('')
+          setRecoveryMode(false)
+          setBusy(false)
+          return
+        }
+      } else {
+        await register(email, name, password)
+      }
       toast.success('Welcome to Acme Chat 👋')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const submit2fa = async (event?: React.FormEvent) => {
+    event?.preventDefault()
+    if (!challenge) return
+    setError(null)
+    setBusy(true)
+    try {
+      await verify2fa(challenge.challengeId, code.trim())
+      toast.success('Welcome to Acme Chat 👋')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'That code did not work')
+      // Wrong code consumed the challenge — restart from the password step
+      setChallenge(null)
+      setCode('')
     } finally {
       setBusy(false)
     }
@@ -89,7 +126,14 @@ export function AuthScreen() {
     setError(null)
     setBusy(true)
     try {
-      await login(user.email, 'demo1234')
+      const result = await login(user.email, 'demo1234')
+      if (result && result.requires2fa) {
+        setChallenge({ challengeId: result.challengeId, email: result.email })
+        setCode('')
+        setRecoveryMode(false)
+        setBusy(false)
+        return
+      }
       toast.success(`Signed in as ${user.name}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Demo login failed')
@@ -242,88 +286,175 @@ export function AuthScreen() {
           </div>
 
           <div className="rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
-            <div className="mb-6 flex rounded-lg bg-muted p-1" role="tablist">
-              {(['login', 'register'] as const).map((tab) => (
+            {challenge ? (
+              <form onSubmit={submit2fa} className="space-y-4">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                    <ShieldCheck className="h-5 w-5" aria-hidden />
+                  </span>
+                  <div className="min-w-0">
+                    <h2 className="text-base font-bold leading-tight">Two-factor authentication</h2>
+                    <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                      Enter the 6-digit code from your authenticator app for{' '}
+                      <span className="font-medium text-foreground">{challenge.email}</span>.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="totp-code">
+                    {recoveryMode ? 'Recovery code' : 'Authenticator code'}
+                  </Label>
+                  <Input
+                    id="totp-code"
+                    autoFocus
+                    inputMode={recoveryMode ? 'text' : 'numeric'}
+                    autoComplete="one-time-code"
+                    placeholder={recoveryMode ? 'acme-xxxx-xxxx' : '••••••'}
+                    value={code}
+                    onChange={(event) => setCode(event.target.value)}
+                    required
+                    minLength={6}
+                    maxLength={16}
+                    className={cn(
+                      'rounded-lg text-center font-mono text-lg tracking-[0.35em]',
+                      !recoveryMode && 'sm:text-xl',
+                    )}
+                  />
+                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                    {recoveryMode
+                      ? 'One-time backup code from the list you saved when you set up 2FA.'
+                      : 'Codes rotate every 30 seconds — use the one showing now.'}
+                  </p>
+                </div>
+
                 <button
-                  key={tab}
                   type="button"
-                  role="tab"
-                  aria-selected={mode === tab}
                   onClick={() => {
-                    setMode(tab)
+                    setRecoveryMode((prev) => !prev)
+                    setCode('')
                     setError(null)
                   }}
-                  className={cn(
-                    'flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150',
-                    mode === tab
-                      ? 'bg-background text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground',
-                  )}
+                  className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 transition-colors hover:text-emerald-500 dark:text-emerald-400 dark:hover:text-emerald-300"
                 >
-                  {tab === 'login' ? 'Sign in' : 'Create account'}
+                  <KeyRound className="h-3.5 w-3.5" aria-hidden />
+                  {recoveryMode ? 'Use an authenticator code instead' : 'Use a recovery code instead'}
                 </button>
-              ))}
-            </div>
 
-            <form onSubmit={submit} className="space-y-4">
-              {mode === 'register' && (
-                <div className="space-y-1.5">
-                  <Label htmlFor="name">Full name</Label>
-                  <Input
-                    id="name"
-                    autoComplete="name"
-                    placeholder="Ada Lovelace"
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
-                    required
-                    minLength={2}
-                    className="rounded-lg"
-                  />
+                {error && (
+                  <p role="alert" className="rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-600 dark:text-rose-400">
+                    {error}
+                  </p>
+                )}
+
+                <Button
+                  type="submit"
+                  disabled={busy || code.trim().length < 6}
+                  className="w-full rounded-lg bg-emerald-600 font-semibold text-white hover:bg-emerald-500 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+                >
+                  {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <ShieldCheck className="h-4 w-4" aria-hidden />}
+                  Verify and sign in
+                </Button>
+
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    setChallenge(null)
+                    setCode('')
+                    setError(null)
+                  }}
+                  className="block w-full text-center text-xs text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  ← Back to sign in
+                </button>
+              </form>
+            ) : (
+              <>
+                <div className="mb-6 flex rounded-lg bg-muted p-1" role="tablist">
+                  {(['login', 'register'] as const).map((tab) => (
+                    <button
+                      key={tab}
+                      type="button"
+                      role="tab"
+                      aria-selected={mode === tab}
+                      onClick={() => {
+                        setMode(tab)
+                        setError(null)
+                      }}
+                      className={cn(
+                        'flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150',
+                        mode === tab
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground',
+                      )}
+                    >
+                      {tab === 'login' ? 'Sign in' : 'Create account'}
+                    </button>
+                  ))}
                 </div>
-              )}
-              <div className="space-y-1.5">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  autoComplete="email"
-                  placeholder="you@acme.test"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  required
-                  className="rounded-lg"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                  placeholder={mode === 'login' ? '••••••••' : '8+ characters'}
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  required
-                  minLength={mode === 'login' ? 1 : 8}
-                  className="rounded-lg"
-                />
-              </div>
 
-              {error && (
-                <p role="alert" className="rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-600 dark:text-rose-400">
-                  {error}
-                </p>
-              )}
+                <form onSubmit={submit} className="space-y-4">
+                  {mode === 'register' && (
+                    <div className="space-y-1.5">
+                      <Label htmlFor="name">Full name</Label>
+                      <Input
+                        id="name"
+                        autoComplete="name"
+                        placeholder="Ada Lovelace"
+                        value={name}
+                        onChange={(event) => setName(event.target.value)}
+                        required
+                        minLength={2}
+                        className="rounded-lg"
+                      />
+                    </div>
+                  )}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      autoComplete="email"
+                      placeholder="you@acme.test"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      required
+                      className="rounded-lg"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="password">Password</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                      placeholder={mode === 'login' ? '••••••••' : '8+ characters'}
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      required
+                      minLength={mode === 'login' ? 1 : 8}
+                      className="rounded-lg"
+                    />
+                  </div>
 
-              <Button
-                type="submit"
-                disabled={busy}
-                className="w-full rounded-lg bg-emerald-600 font-semibold text-white hover:bg-emerald-500 dark:bg-emerald-600 dark:hover:bg-emerald-500"
-              >
-                {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Zap className="h-4 w-4" aria-hidden />}
-                {mode === 'login' ? 'Sign in' : 'Create account'}
-              </Button>
-            </form>
+                  {error && (
+                    <p role="alert" className="rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-600 dark:text-rose-400">
+                      {error}
+                    </p>
+                  )}
+
+                  <Button
+                    type="submit"
+                    disabled={busy}
+                    className="w-full rounded-lg bg-emerald-600 font-semibold text-white hover:bg-emerald-500 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+                  >
+                    {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Zap className="h-4 w-4" aria-hidden />}
+                    {mode === 'login' ? 'Sign in' : 'Create account'}
+                  </Button>
+                </form>
+              </>
+            )}
           </div>
 
           {/* demo users */}
@@ -355,7 +486,15 @@ export function AuthScreen() {
                         {initials(user.name)}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium leading-tight">{user.name}</span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="block truncate text-sm font-medium leading-tight">{user.name}</span>
+                          {user.totpEnabled && (
+                            <ShieldCheck
+                              className="h-3.5 w-3.5 shrink-0 text-emerald-500"
+                              aria-label="Two-factor authentication is on — a code will be asked at sign-in"
+                            />
+                          )}
+                        </span>
                         <span className="block truncate text-xs text-muted-foreground">
                           {user.title ?? user.role}
                         </span>

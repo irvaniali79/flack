@@ -461,6 +461,15 @@ export function AdminView() {
                                             bot
                                           </Badge>
                                         )}
+                                        {user.totpEnabled && (
+                                          <Badge
+                                            variant="outline"
+                                            className="gap-0.5 rounded px-1 text-[9px] uppercase tracking-wide text-emerald-600 dark:text-emerald-400"
+                                            title="Two-factor authentication is on"
+                                          >
+                                            2fa
+                                          </Badge>
+                                        )}
                                         {isSelf && (
                                           <span className="text-[10px] text-muted-foreground">(you)</span>
                                         )}

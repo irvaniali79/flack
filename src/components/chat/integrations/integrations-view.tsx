@@ -18,6 +18,7 @@ import {
   Layers,
   Loader2,
   Plug,
+  Sparkles,
   Terminal,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -196,6 +197,12 @@ function ResourcesSection({ origin }: { origin: string }) {
   -d '{"jsonrpc":"2.0","id":1,"method":"resources/read",
        "params":{"uri":"acme://channels/general"}}'`
 
+  const templateSnippet = `curl -X POST ${origin}/api/mcp \\
+  -H "Authorization: Bearer acme_YOUR_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"jsonrpc":"2.0","id":1,"method":"resources/read",
+       "params":{"uri":"acme://channels/engineering/messages?limit=10"}}'`
+
   return (
     <section aria-labelledby="resources-heading" className="space-y-3">
       <div className="flex items-center gap-2.5">
@@ -263,6 +270,21 @@ function ResourcesSection({ origin }: { origin: string }) {
               <code className="rounded bg-muted px-1 font-mono text-[10px]">channels:read</code> scope.
             </p>
             <CodeBlock code={readSnippet} language="bash" highlight />
+          </div>
+          <div className="rounded-xl border border-teal-500/25 bg-teal-500/5 p-3">
+            <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-teal-700 dark:text-teal-300">
+              <Sparkles className="h-3 w-3" aria-hidden /> Resource templates — parameterized reads
+            </p>
+            <p className="mb-2 text-[11px] leading-relaxed text-muted-foreground">
+              <code className="rounded bg-muted px-1 font-mono text-[10px]">resources/templates/list</code>{' '}
+              exposes one URI template so clients can request any channel with a size that fits their
+              context window:{' '}
+              <code className="rounded bg-muted px-1 font-mono text-[10px] text-teal-700 dark:text-teal-300">
+                acme://channels/{'{slug}'}/messages?limit=N
+              </code>{' '}
+              (N between 1 and 200, default 50).
+            </p>
+            <CodeBlock code={templateSnippet} language="bash" highlight />
           </div>
         </div>
       )}
@@ -399,6 +421,7 @@ export function IntegrationsView() {
                 <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-medium">tools/call</Badge>
                 <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-medium">resources/list</Badge>
                 <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-medium">resources/read</Badge>
+                <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-medium">resources/templates/list</Badge>
                 <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-medium">ping</Badge>
                 <Badge variant="outline" className="h-5 px-1.5 text-[10px]">Bearer auth</Badge>
               </div>

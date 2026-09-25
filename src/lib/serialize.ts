@@ -38,6 +38,8 @@ export function serializeUser(user: UserWithAgent): UserDTO {
     dndEnabled: user.dndEnabled,
     dndStart: user.dndStart,
     dndEnd: user.dndEnd,
+    totpEnabled: user.totpEnabled,
+    emailNotif: (user.emailNotif === 'digest' ? 'digest' : 'off') as UserDTO['emailNotif'],
     isActive: user.isActive,
     handle: user.agent?.handle,
     timezone: user.timezone,

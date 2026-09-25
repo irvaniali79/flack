@@ -11,7 +11,7 @@ export function PresenceDot({
   return (
     <span
       className={cn(
-        'block h-3 w-3 rounded-full border-2 border-background dark:border-zinc-950',
+        'block h-3.5 w-3.5 rounded-full border-[2.5px] border-background dark:border-zinc-950',
         online ? 'bg-emerald-500 presence-pulse' : 'bg-zinc-400 dark:bg-zinc-600',
         className,
       )}

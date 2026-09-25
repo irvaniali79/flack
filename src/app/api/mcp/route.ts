@@ -8,7 +8,8 @@
 //        in-app tool playground uses.
 //
 // Methods: initialize · notifications/initialized · ping · tools/list ·
-//          tools/call · resources/list · resources/read · prompts/list
+//          tools/call · resources/list · resources/read ·
+//          resources/templates/list · prompts/list
 import { db } from '@/lib/db'
 import { getSessionUser } from '@/lib/auth'
 import { requireApiKeyUser, TOOL_SCOPE_REQUIREMENTS } from '@/lib/api-keys'
@@ -180,7 +181,8 @@ async function handleMessage(request: Request, msg: JsonRpcRequest): Promise<Res
         instructions:
           'Acme Chat MCP server. Tools: post_message, read_channel, search_messages, list_channels, ' +
           'get_thread, add_reaction, create_channel. Resources: acme://channels/{slug} ' +
-          '(recent messages — list with resources/list, read with resources/read). ' +
+          '(recent messages — list with resources/list, read with resources/read) and the ' +
+          'parameterized template acme://channels/{slug}/messages?limit=N (see resources/templates/list). ' +
           'All actions run as ' +
           actor.user.name + '.',
       })
@@ -237,18 +239,42 @@ async function handleMessage(request: Request, msg: JsonRpcRequest): Promise<Res
       })
     }
 
+    case 'resources/templates/list': {
+      // Parameterized reads: one template covers every channel with a limit
+      return ok(id, {
+        resourceTemplates: [
+          {
+            uriTemplate: 'acme://channels/{slug}/messages?limit={limit}',
+            name: 'Channel messages',
+            description:
+              'Latest messages from any readable channel. slug is the channel slug (see resources/list); ' +
+              'limit is optional (1-200, default 50).',
+            mimeType: 'application/json',
+          },
+        ],
+      })
+    }
+
     case 'resources/read': {
       const uri = typeof msg.params?.uri === 'string' ? msg.params.uri : ''
       // Scope enforcement mirrors tools (session playground = full access)
       if (actor.scopes && !actor.scopes.has('channels:read')) {
         return err(id, -32602, 'This API key lacks the "channels:read" scope required for resources')
       }
-      const match = /^acme:\/\/channels\/([a-z0-9-]+)$/.exec(uri)
+      // acme://channels/{slug}                → latest 50
+      // acme://channels/{slug}/messages?limit=N → latest N (1-200)
+      const match = /^acme:\/\/channels\/([a-z0-9-]+)(\/messages)?(?:\?limit=(\d+))?$/.exec(uri)
       if (!match) {
-        return err(id, -32602, 'Invalid resource uri — expected acme://channels/{slug} (list with resources/list)')
+        return err(
+          id,
+          -32602,
+          'Invalid resource uri — expected acme://channels/{slug} or acme://channels/{slug}/messages?limit=N (list with resources/list, templates with resources/templates/list)',
+        )
       }
+      const [, slug, , limitRaw] = match
+      const limit = Math.min(Math.max(Number(limitRaw ?? 50) || 50, 1), 200)
       const channel = await db.channel.findFirst({
-        where: { orgId: actor.user.orgId, slug: match[1] },
+        where: { orgId: actor.user.orgId, slug },
         include: { members: { where: { userId: actor.user.id }, select: { userId: true } } },
       })
       if (!channel || (channel.kind !== 'public' && channel.members.length === 0)) {
@@ -257,7 +283,7 @@ async function handleMessage(request: Request, msg: JsonRpcRequest): Promise<Res
       const messages = await db.message.findMany({
         where: { channelId: channel.id, deletedAt: null },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        take: 50,
+        take: limit,
         include: {
           sender: { select: { name: true } },
           reactions: { select: { emoji: true } },
@@ -271,6 +297,7 @@ async function handleMessage(request: Request, msg: JsonRpcRequest): Promise<Res
             text: JSON.stringify(
               {
                 channel: { slug: channel.slug, name: channel.name, kind: channel.kind, topic: channel.topic },
+                count: messages.length,
                 messages: messages.reverse().map((m) => ({
                   ts: m.id,
                   thread_ts: m.parentId ?? null,
@@ -350,7 +377,7 @@ export async function GET() {
       version: SERVER_INFO.version,
       protocolVersion: PROTOCOL_VERSION,
       transport: 'http-jsonrpc',
-      methods: ['initialize', 'notifications/initialized', 'ping', 'tools/list', 'tools/call', 'resources/list', 'resources/read', 'prompts/list'],
+      methods: ['initialize', 'notifications/initialized', 'ping', 'tools/list', 'tools/call', 'resources/list', 'resources/read', 'resources/templates/list', 'prompts/list'],
       auth: 'Authorization: Bearer acme_… (API key) — manage keys in the app: Integrations view',
       note: 'Send JSON-RPC 2.0 requests via POST. SSE streaming is not enabled.',
     },

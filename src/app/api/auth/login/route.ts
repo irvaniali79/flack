@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { createSession, handle, HttpError, verifyPassword } from '@/lib/auth'
+import { createLoginChallenge } from '@/lib/login-challenge'
 import { serializeUser } from '@/lib/serialize'
 
 const schema = z.object({
@@ -22,6 +23,13 @@ export async function POST(request: Request) {
 
     if (!verifyPassword(parsed.data.password, user.passwordHash)) {
       throw new HttpError(401, 'Invalid email or password')
+    }
+
+    // 2FA-armed accounts: password alone is not enough — hand back a
+    // short-lived challenge and wait for a TOTP / recovery code.
+    if (user.totpEnabled && user.totpSecret) {
+      const challengeId = createLoginChallenge(user.id)
+      return { requires2fa: true, challengeId, email }
     }
 
     await createSession(user.id)

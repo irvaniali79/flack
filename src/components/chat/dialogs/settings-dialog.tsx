@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useTheme } from 'next-themes'
 import { toast } from 'sonner'
-import { BellOff, Check, Clock, Mail, MoonStar, Monitor, Moon, Smile, Sun } from 'lucide-react'
+import { BellOff, Check, Clock, Mail, MoonStar, Monitor, Moon, ShieldCheck, Smile, Sun } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -29,6 +29,8 @@ import { localTimezoneLabel } from '@/lib/time'
 import { formatHHmm, isQuietHours, quietUntilLabel } from '@/lib/dnd'
 import { UserAvatar } from '../avatar'
 import { EmojiPicker } from '../emoji-picker'
+import { SecurityTab } from './security-tab'
+import { EmailNotifSection } from './email-notif-section'
 
 const TIMEZONES = [
   'UTC',
@@ -158,10 +160,22 @@ export function SettingsDialog() {
 
         <Tabs defaultValue="profile">
           <div className="px-5 pt-3">
-            <TabsList className="grid w-full grid-cols-3 rounded-xl">
-              <TabsTrigger value="profile" className="rounded-lg text-xs sm:text-sm">Profile</TabsTrigger>
-              <TabsTrigger value="notifications" className="rounded-lg text-xs sm:text-sm">Notifications</TabsTrigger>
-              <TabsTrigger value="appearance" className="rounded-lg text-xs sm:text-sm">Appearance</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-4 rounded-xl">
+              <TabsTrigger value="profile" className="rounded-lg px-1 text-[11px] sm:text-xs">Profile</TabsTrigger>
+              <TabsTrigger value="notifications" className="rounded-lg px-1 text-[11px] sm:text-xs">Alerts</TabsTrigger>
+              <TabsTrigger value="security" className="rounded-lg px-1 text-[11px] sm:text-xs">
+                <span className="flex items-center gap-1">
+                  Security
+                  {me.totpEnabled && (
+                    <span
+                      className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500"
+                      aria-label="Two-factor authentication is on"
+                      title="Two-factor authentication is on"
+                    />
+                  )}
+                </span>
+              </TabsTrigger>
+              <TabsTrigger value="appearance" className="rounded-lg px-1 text-[11px] sm:text-xs">Theme</TabsTrigger>
             </TabsList>
           </div>
 
@@ -394,6 +408,8 @@ export function SettingsDialog() {
               </Button>
             </div>
 
+            <EmailNotifSection />
+
             <div className="rounded-xl bg-muted/50 p-3.5 text-xs leading-relaxed text-muted-foreground">
               <p className="font-semibold text-foreground">Fine-grained control</p>
               <p className="mt-1">
@@ -402,6 +418,21 @@ export function SettingsDialog() {
                 messages, mentions only, or nothing.
               </p>
             </div>
+          </TabsContent>
+
+          {/* ── Security ─────────────────────────────────────────────────────── */}
+          <TabsContent value="security" className="mt-4 space-y-4 px-5 pb-5">
+            {me.kind === 'human' ? (
+              <SecurityTab />
+            ) : (
+              <div className="flex items-start gap-3 rounded-xl border p-4">
+                <ShieldCheck className="mt-0.5 h-4.5 w-4.5 shrink-0 text-muted-foreground" aria-hidden />
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  Agent accounts authenticate with workspace credentials, not passwords —
+                  two-factor authentication doesn&apos;t apply.
+                </p>
+              </div>
+            )}
           </TabsContent>
 
           {/* ── Appearance ───────────────────────────────────────────────────── */}

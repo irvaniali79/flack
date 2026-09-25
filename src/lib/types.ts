@@ -14,6 +14,10 @@ export interface UserDTO {
   dndEnabled: boolean
   dndStart: string | null
   dndEnd: string | null
+  /** Two-factor authentication armed (TOTP) */
+  totpEnabled?: boolean
+  /** off | digest — email preference for quiet-hour digests */
+  emailNotif?: 'off' | 'digest'
   isActive: boolean
   handle?: string // agents only
   timezone?: string

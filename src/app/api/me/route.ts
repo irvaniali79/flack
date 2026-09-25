@@ -22,6 +22,8 @@ const patchSchema = z.object({
   dndStart: z.string().regex(HHMM, 'Use HH:MM (24h)').nullable().optional(),
   dndEnd: z.string().regex(HHMM, 'Use HH:MM (24h)').nullable().optional(),
   timezone: z.string().trim().max(64).optional(),
+  // off | digest — whether released quiet-hour digests also go to email
+  emailNotif: z.enum(['off', 'digest']).optional(),
 })
 
 export async function PATCH(request: Request) {

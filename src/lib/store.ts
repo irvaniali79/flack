@@ -148,7 +148,8 @@ interface ChatState {
 
   // ── actions ───────────────────────────────────────────────────────────────
   fetchBootstrap: () => Promise<void>
-  login: (email: string, password: string) => Promise<void>
+  login: (email: string, password: string) => Promise<{ requires2fa: true; challengeId: string; email: string } | null>
+  verify2fa: (challengeId: string, code: string) => Promise<void>
   register: (email: string, name: string, password: string) => Promise<void>
   logout: () => Promise<void>
   fetchChannels: () => Promise<void>
@@ -181,7 +182,9 @@ interface ChatState {
   setNotifyPrefs: (channelId: string, patch: { notifyLevel?: ChannelDTO['notifyLevel']; muted?: boolean }) => Promise<void>
   markChannelRead: (channelId: string, messageId: string | null) => void
   setDraft: (channelId: string, text: string) => void
-  updateMe: (patch: Partial<Pick<UserDTO, 'name' | 'title' | 'statusEmoji' | 'statusText' | 'dndEnabled' | 'dndStart' | 'dndEnd' | 'timezone'>>) => Promise<void>
+  updateMe: (patch: Partial<Pick<UserDTO, 'name' | 'title' | 'statusEmoji' | 'statusText' | 'dndEnabled' | 'dndStart' | 'dndEnd' | 'timezone' | 'emailNotif'>>) => Promise<void>
+  /** Re-fetch the current user (e.g. after 2FA changes made via other endpoints). */
+  refreshMe: () => Promise<void>
   markNotificationsRead: (ids?: string[]) => Promise<void>
   emitTyping: (channelId: string) => void
 
@@ -310,7 +313,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   login: async (email, password) => {
-    await api<{ user: UserDTO }>('/api/auth/login', { method: 'POST', body: { email, password } })
+    const res = await api<
+      { user: UserDTO } | { requires2fa: true; challengeId: string; email: string }
+    >('/api/auth/login', { method: 'POST', body: { email, password } })
+    if ('requires2fa' in res && res.requires2fa) {
+      // Password OK — the account is 2FA-armed; the caller shows the code step
+      return res
+    }
+    await get().fetchBootstrap()
+    return null
+  },
+
+  /** Second login step for 2FA accounts: TOTP or recovery code → session. */
+  verify2fa: async (challengeId, code) => {
+    await api<{ user: UserDTO }>('/api/auth/login/2fa', {
+      method: 'POST',
+      body: { challengeId, code },
+    })
     await get().fetchBootstrap()
   },
 
@@ -733,6 +752,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
       me: user,
       users: s.users.map((u) => (u.id === user.id ? user : u)),
     }))
+  },
+
+  refreshMe: async () => {
+    try {
+      const user = await api<UserDTO>('/api/me')
+      set((s) => ({
+        me: user,
+        users: s.users.map((u) => (u.id === user.id ? user : u)),
+      }))
+    } catch {
+      // ignore — keep the current snapshot
+    }
   },
 
   markNotificationsRead: async (ids) => {

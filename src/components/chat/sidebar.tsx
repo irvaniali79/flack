@@ -519,7 +519,7 @@ export function Sidebar({
         <button
           type="button"
           onClick={() => setSearchOpen(true)}
-          className="flex w-full items-center gap-2 rounded-lg border border-transparent bg-zinc-200/70 px-2.5 py-1.5 text-sm text-muted-foreground transition-colors duration-150 hover:border-border hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-800/80"
+          className="flex w-full items-center gap-2 rounded-lg border border-transparent bg-zinc-200/70 px-2.5 py-1.5 text-sm text-muted-foreground transition-all duration-150 hover:border-border hover:bg-zinc-200 focus-visible:border-emerald-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30 dark:bg-zinc-800 dark:hover:bg-zinc-800/80 dark:focus-visible:border-emerald-400/40"
         >
           <Search className="h-3.5 w-3.5" aria-hidden />
           <span className="flex-1 text-left">Search…</span>
@@ -627,7 +627,7 @@ export function Sidebar({
         </section>
 
         {/* agents section */}
-        <section aria-label="AI agents" className="mt-3">
+        <section aria-label="AI agents" className="mt-4 border-t border-border/40 pt-2.5">
           <div className="flex items-center gap-0.5 px-2 py-1">
             <button
               type="button"

@@ -24,6 +24,7 @@ model Org {
   auditLogs AuditLog[]
   apiKeys   ApiKey[]
   customEmojis CustomEmoji[]
+  emailOutbox  EmailOutbox[]
 }
 
 // ─── Users & Auth ────────────────────────────────────────────────────────────
@@ -48,6 +49,13 @@ model User {
   // Quiet-hours window "HH:MM" 24h (e.g. "22:00" / "07:00", may wrap midnight)
   dndStart     String?
   dndEnd       String?
+  // TOTP two-factor auth (RFC 6238): base32 secret, armed only when totpEnabled
+  totpSecret   String?
+  totpEnabled  Boolean  @default(false)
+  // JSON string array of sha256-hashed one-time recovery codes (shown once at enable)
+  recoveryCodes String?
+  // off | digest — notification email preference (adapter in lib/mail.ts)
+  emailNotif   String   @default("off")
   isActive     Boolean  @default(true)
   externalId   String?
   createdAt    DateTime @default(now())
@@ -317,4 +325,23 @@ model AuditLog {
   // JSON string with extra metadata
   meta      String?
   createdAt DateTime @default(now())
+}
+
+// ─── Email outbox (mail adapter audit trail) ─────────────────────────────────
+// Rows are written by the MailAdapter in lib/mail.ts. The bundled adapter is a
+// local outbox (no SMTP in the sandbox); a production SMTP adapter implements
+// the same interface and swaps in via config — the outbox remains the record.
+
+model EmailOutbox {
+  id        String   @id @default(cuid())
+  orgId     String
+  org       Org      @relation(fields: [orgId], references: [id])
+  toEmail   String
+  subject   String
+  body      String
+  // e.g. "quiet-digest" | "test"
+  kind      String
+  createdAt DateTime @default(now())
+
+  @@index([toEmail, createdAt])
 }
