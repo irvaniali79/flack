@@ -1,6 +1,7 @@
 'use client'
 import { useTheme } from 'next-themes'
 import {
+  Blocks,
   Hash,
   LogOut,
   MessageSquare,
@@ -162,6 +163,22 @@ export function Rail() {
             </button>
           </TooltipTrigger>
           <TooltipContent side="right">Workflows</TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              aria-label="App directory — connectors"
+              aria-pressed={view === 'connectors'}
+              onClick={() => setView('connectors')}
+              className={cn(buttonClass(view === 'connectors'), 'group')}
+            >
+              <Blocks className="h-5 w-5" aria-hidden />
+              <span className={accentClass(view === 'connectors')} aria-hidden />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right">App directory — connectors</TooltipContent>
         </Tooltip>
 
         <Tooltip>

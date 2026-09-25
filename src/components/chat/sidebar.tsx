@@ -4,6 +4,7 @@ import { useTheme } from 'next-themes'
 import {
   Bell,
   BellOff,
+  Blocks,
   Bookmark,
   Bot,
   CheckCheck,
@@ -707,6 +708,12 @@ export function Sidebar({
             <div className="space-y-0.5">
               <WorkspaceRow icon={MessagesSquare} label="Threads" title="Threads you follow" target="threads" />
               <WorkspaceRow icon={Zap} label="Workflows" target="workflows" />
+              <WorkspaceRow
+                icon={Blocks}
+                label="App directory"
+                title="Connectors — Google Calendar, GitHub, Drive & more"
+                target="connectors"
+              />
               <WorkspaceRow
                 icon={Plug}
                 label="Integrations"

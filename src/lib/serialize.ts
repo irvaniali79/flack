@@ -12,6 +12,7 @@ import type {
 import type {
   AgentDTO,
   ChannelDTO,
+  ConnectorMessagePayload,
   FileDTO,
   MessageDTO,
   MessageMentions,
@@ -28,10 +29,10 @@ export function serializeUser(user: UserWithAgent): UserDTO {
   return {
     id: user.id,
     name: user.name,
-    email: user.kind === 'agent' ? undefined : user.email,
+    email: user.kind === 'human' ? user.email : undefined,
     title: user.title,
     avatarColor: user.avatarColor,
-    kind: (user.kind === 'agent' ? 'agent' : 'human') as UserDTO['kind'],
+    kind: (user.kind === 'agent' ? 'agent' : user.kind === 'app' ? 'app' : 'human') as UserDTO['kind'],
     role: user.role as UserDTO['role'],
     statusEmoji: user.statusEmoji,
     statusText: user.statusText,
@@ -43,6 +44,7 @@ export function serializeUser(user: UserWithAgent): UserDTO {
     isActive: user.isActive,
     handle: user.agent?.handle,
     timezone: user.timezone,
+    accentTheme: user.accentTheme ?? 'emerald',
   }
 }
 
@@ -65,6 +67,31 @@ function parseMentions(raw: string | null): MessageMentions {
     }
   } catch {
     return { userIds: [], specials: [] }
+  }
+}
+
+function parseConnectorPayload(raw: string | null): ConnectorMessagePayload | null {
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as Partial<ConnectorMessagePayload>
+    if (!parsed || typeof parsed.title !== 'string') return null
+    return {
+      event: typeof parsed.event === 'string' ? parsed.event : '',
+      title: parsed.title,
+      fields: Array.isArray(parsed.fields)
+        ? parsed.fields
+            .filter((f) => f && typeof f.label === 'string' && typeof f.value === 'string')
+            .map((f) => ({ label: f.label, value: f.value }))
+        : [],
+      actions: Array.isArray(parsed.actions)
+        ? parsed.actions
+            .filter((a) => a && typeof a.label === 'string')
+            .map((a) => ({ label: a.label, style: a.style === 'primary' ? 'primary' : 'default' }))
+        : [],
+      footer: typeof parsed.footer === 'string' ? parsed.footer : undefined,
+    }
+  } catch {
+    return null
   }
 }
 
@@ -94,6 +121,8 @@ export function serializeMessage(message: MessageFull): MessageDTO {
     deletedAt: message.deletedAt?.toISOString() ?? null,
     createdAt: message.createdAt.toISOString(),
     reactions: [...byEmoji.values()].sort((a, b) => b.count - a.count),
+    connectorId: message.connectorId ?? null,
+    connectorPayload: message.connectorPayload ? parseConnectorPayload(message.connectorPayload) : null,
     files: message.deletedAt
       ? []
       : message.files.map((file): FileDTO => ({
@@ -180,6 +209,60 @@ function safeJsonArray(raw: string): string[] {
     return Array.isArray(parsed) ? (parsed as string[]) : []
   } catch {
     return []
+  }
+}
+
+// ─── Connectors ─────────────────────────────────────────────────────────────
+
+import type { ConnectorConnection } from '@prisma/client'
+import type { ConnectorConnectionDTO, ConnectorDefDTO } from './types'
+import type { ConnectorDef } from './connectors'
+
+export type ConnectionFull = ConnectorConnection & {
+  channel: { id: string; name: string; slug: string; kind: string }
+  appUser: { id: string; name: string; avatarColor: string }
+  connectedBy: { name: string } | null
+}
+
+export function serializeConnectorDef(
+  def: ConnectorDef,
+  connectedCount: number,
+): ConnectorDefDTO {
+  return {
+    id: def.id,
+    name: def.name,
+    tagline: def.tagline,
+    description: def.description,
+    category: def.category,
+    icon: def.icon,
+    color: def.color,
+    scopes: def.scopes,
+    sampleAccounts: def.sampleAccounts,
+    events: def.events,
+    connectedCount,
+  }
+}
+
+export function serializeConnection(connection: ConnectionFull): ConnectorConnectionDTO {
+  return {
+    id: connection.id,
+    connectorId: connection.connectorId,
+    accountLabel: connection.accountLabel,
+    eventSubs: JSON.parse(connection.eventSubs ?? '{}') as Record<string, boolean>,
+    channel: {
+      id: connection.channel.id,
+      name: connection.channel.name,
+      slug: connection.channel.slug,
+      kind: connection.channel.kind,
+    },
+    appUser: {
+      id: connection.appUser.id,
+      name: connection.appUser.name,
+      avatarColor: connection.appUser.avatarColor,
+    },
+    connectedBy: connection.connectedBy?.name ?? null,
+    status: connection.status,
+    createdAt: connection.createdAt.toISOString(),
   }
 }
 

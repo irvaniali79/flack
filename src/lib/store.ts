@@ -1,7 +1,9 @@
 'use client'
 // Central zustand store: session, data, realtime state, drafts + UI flags.
 import { create } from 'zustand'
+import { toast } from 'sonner'
 import { api } from './api'
+import { isAccentKey } from './theme-options'
 import type {
   AgentDTO,
   ChannelDTO,
@@ -20,6 +22,25 @@ import {
 
 const DRAFT_KEY = 'acme-drafts'
 const SAVED_KEY = 'acme-saved-messages'
+const ACCENT_KEY = 'acme-accent'
+
+// Guards against a stale PATCH response clobbering a newer optimistic switch.
+let accentRequestSeq = 0
+
+/**
+ * Apply an accent theme to <html data-accent='…'> and persist it for the
+ * pre-paint script in layout.tsx. Empty/unknown values fall back to the
+ * default ('emerald' has no CSS override — Tailwind's palette applies).
+ */
+function applyAccentTheme(key: string | null | undefined) {
+  const value = key && key.trim() && isAccentKey(key) ? key : 'emerald'
+  try {
+    document.documentElement.dataset.accent = value
+    localStorage.setItem(ACCENT_KEY, value)
+  } catch {
+    // storage unavailable — the attribute still applied above
+  }
+}
 
 function loadDrafts(): Record<string, string> {
   try {
@@ -185,6 +206,8 @@ interface ChatState {
   updateMe: (patch: Partial<Pick<UserDTO, 'name' | 'title' | 'statusEmoji' | 'statusText' | 'dndEnabled' | 'dndStart' | 'dndEnd' | 'timezone' | 'emailNotif'>>) => Promise<void>
   /** Re-fetch the current user (e.g. after 2FA changes made via other endpoints). */
   refreshMe: () => Promise<void>
+  /** Optimistically switch the accent color theme and persist it on the profile. */
+  setAccentTheme: (key: string) => Promise<void>
   markNotificationsRead: (ids?: string[]) => Promise<void>
   snoozeNotification: (id: string, preset: { minutes?: number; until?: string }) => Promise<void>
   unsnoozeNotification: (id: string) => Promise<void>
@@ -304,6 +327,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
         notificationsUnread: data.notificationsUnread,
         bootstrapping: false,
       })
+      // Reconcile the pre-paint localStorage guess with the profile value
+      // (server wins once you're logged in).
+      applyAccentTheme(data.me.accentTheme)
       const { me } = get()
       if (me) initSocket(me.id, me.name)
       // custom emoji power message rendering + the picker — fetch alongside
@@ -759,6 +785,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       me: user,
       users: s.users.map((u) => (u.id === user.id ? user : u)),
     }))
+    applyAccentTheme(user.accentTheme)
   },
 
   refreshMe: async () => {
@@ -768,8 +795,39 @@ export const useChatStore = create<ChatState>((set, get) => ({
         me: user,
         users: s.users.map((u) => (u.id === user.id ? user : u)),
       }))
+      applyAccentTheme(user.accentTheme)
     } catch {
       // ignore — keep the current snapshot
+    }
+  },
+
+  setAccentTheme: async (key) => {
+    const me = get().me
+    if (!me || !isAccentKey(key) || me.accentTheme === key) return
+    const previous = me.accentTheme ?? 'emerald'
+    const seq = ++accentRequestSeq
+    // Optimistic — recolor immediately, then reconcile with the server.
+    applyAccentTheme(key)
+    set((s) => ({
+      me: s.me ? { ...s.me, accentTheme: key } : s.me,
+      users: s.users.map((u) => (u.id === me.id ? { ...u, accentTheme: key } : u)),
+    }))
+    try {
+      const user = await api<UserDTO>('/api/me', { method: 'PATCH', body: { accentTheme: key } })
+      if (seq !== accentRequestSeq) return // a newer switch superseded this one
+      set((s) => ({
+        me: user,
+        users: s.users.map((u) => (u.id === user.id ? user : u)),
+      }))
+      applyAccentTheme(user.accentTheme)
+    } catch (err) {
+      if (seq !== accentRequestSeq) return
+      applyAccentTheme(previous)
+      set((s) => ({
+        me: s.me ? { ...s.me, accentTheme: previous } : s.me,
+        users: s.users.map((u) => (u.id === me.id ? { ...u, accentTheme: previous } : u)),
+      }))
+      toast.error(err instanceof Error ? err.message : 'Could not save accent theme')
     }
   },
 

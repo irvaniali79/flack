@@ -38,6 +38,7 @@ import type { UserDTO } from '@/lib/types'
 import { UserAvatar } from './avatar'
 import { PresenceDot } from './presence-dot'
 import { SummaryTrigger } from './agents/summary-dialog'
+import { AppBadge } from './connectors/connector-icon'
 import { formatRelativeTime } from '@/lib/time'
 
 // ─── members popover ─────────────────────────────────────────────────────────
@@ -147,11 +148,17 @@ function MembersPopover() {
               onClick={() => setProfileUserId(user.id)}
               className="group flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors duration-150 hover:bg-accent"
             >
-              <UserAvatar user={user} size="xs" presence online={presence[user.id] || user.kind === 'agent'} />
+              <UserAvatar
+                user={user}
+                size="xs"
+                presence={user.kind !== 'app'}
+                online={presence[user.id] || user.kind === 'agent'}
+              />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm">
-                  {user.name}
-                  {user.id === me?.id && <span className="ml-1 text-xs text-muted-foreground">(you)</span>}
+                <span className="flex items-center gap-1.5">
+                  <span className="block truncate text-sm">{user.name}</span>
+                  {user.kind === 'app' && <AppBadge />}
+                  {user.id === me?.id && <span className="text-xs text-muted-foreground">(you)</span>}
                 </span>
                 <span className="block truncate text-[11px] text-muted-foreground">{user.title}</span>
               </span>

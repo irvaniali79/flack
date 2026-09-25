@@ -25,6 +25,7 @@ model Org {
   apiKeys   ApiKey[]
   customEmojis CustomEmoji[]
   emailOutbox  EmailOutbox[]
+  connections ConnectorConnection[]
 }
 
 // ─── Users & Auth ────────────────────────────────────────────────────────────
@@ -56,6 +57,8 @@ model User {
   recoveryCodes String?
   // off | digest — notification email preference (adapter in lib/mail.ts)
   emailNotif   String   @default("off")
+  // Accent color theme key (lib/theme-options.ts) — roams across devices
+  accentTheme  String   @default("emerald")
   isActive     Boolean  @default(true)
   externalId   String?
   createdAt    DateTime @default(now())
@@ -70,6 +73,8 @@ model User {
   notifications Notification[]
   apiKeys      ApiKey[]
   threadFollows ThreadFollow[]
+  appConnections ConnectorConnection[] @relation("ConnectorAppUser")
+  connectedApps  ConnectorConnection[] @relation("ConnectorConnectedBy")
 }
 
 model Session {
@@ -126,6 +131,7 @@ model Channel {
 
   members  ChannelMember[]
   messages Message[]
+  connectorConnections ConnectorConnection[]
 
   @@unique([orgId, slug])
 }
@@ -164,6 +170,10 @@ model Message {
   isPinned  Boolean   @default(false)
   editedAt  DateTime?
   deletedAt DateTime?
+  // Connector (app) message: catalog key e.g. "google-calendar" — rendered as a rich app card
+  connectorId  String?
+  // JSON string: { event, title, fields: [{label,value}], actions: [{label,style}], footer }
+  connectorPayload String?
   // Slack export import: the source message ts ("1234567890.000100") — used for idempotent re-import
   externalId String?
   createdAt DateTime  @default(now())
@@ -298,6 +308,35 @@ model CustomEmoji {
   createdAt DateTime @default(now())
 
   @@unique([orgId, name])
+}
+
+// ─── Connector connections (Slack-style app directory installs) ─────────────
+// A connection = one connector (Google Calendar, GitHub, …) linked to one
+// account label, posting its events into one channel as a bot "app" user.
+model ConnectorConnection {
+  id           String   @id @default(cuid())
+  orgId        String
+  org          Org      @relation(fields: [orgId], references: [id])
+  // Catalog key in src/lib/connectors.ts — "google-calendar", "github", …
+  connectorId  String
+  // Demo OAuth account label — "sarah@acme.test" or "Acme Inc / shared drive"
+  accountLabel String
+  // JSON string: { eventId: true } — which of the connector's events post to the channel
+  eventSubs    String?
+  channelId    String
+  channel      Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  // The connector's bot user (User.kind = "app") that posts messages
+  appUserId    String
+  appUser      User     @relation("ConnectorAppUser", fields: [appUserId], references: [id], onDelete: Cascade)
+  connectedById String?
+  connectedBy  User?    @relation("ConnectorConnectedBy", fields: [connectedById], references: [id], onDelete: SetNull)
+  // connected | disconnected
+  status       String   @default("connected")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([orgId, connectorId, accountLabel])
+  @@index([orgId, status])
 }
 
 // ─── Notifications & Audit ───────────────────────────────────────────────────

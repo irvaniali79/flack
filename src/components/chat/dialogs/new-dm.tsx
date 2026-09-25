@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils'
 import { useChatStore } from '@/lib/store'
 import { UserAvatar } from '../avatar'
 import { PresenceDot } from '../presence-dot'
+import { AppBadge } from '../connectors/connector-icon'
 
 export function NewDmDialog() {
   const open = useChatStore((s) => s.newDmOpen)
@@ -128,16 +129,22 @@ export function NewDmDialog() {
                   )}
                 >
                   <span className="relative">
-                    <UserAvatar user={user} size="md" presence online={presence[user.id] || user.kind === 'agent'} />
+                    <UserAvatar
+                      user={user}
+                      size="md"
+                      presence={user.kind !== 'app'}
+                      online={presence[user.id] || user.kind === 'agent'}
+                    />
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-1.5">
                       <span className="truncate text-sm font-semibold">{user.name}</span>
                       {user.kind === 'agent' && (
-                        <span className="flex items-center gap-0.5 rounded bg-amber-500/15 px-1 py-px text-[9px] font-bold uppercase text-amber-600 dark:text-amber-400">
+                        <span className="flex shrink-0 items-center gap-0.5 rounded bg-amber-500/15 px-1 py-px text-[9px] font-bold uppercase text-amber-600 dark:text-amber-400">
                           <Sparkles className="h-2.5 w-2.5" aria-hidden /> AI
                         </span>
                       )}
+                      {user.kind === 'app' && <AppBadge className="shrink-0" />}
                     </span>
                     <span className="block truncate text-xs text-muted-foreground">
                       {user.title ?? (user.handle ? `@${user.handle}` : '')}

@@ -28,6 +28,7 @@ import { ThreadsView } from './threads-view'
 import { WorkflowsView } from './workflows/workflows-view'
 import { AdminView } from './admin/admin-view'
 import { IntegrationsView } from './integrations/integrations-view'
+import { ConnectorsView } from './connectors/connectors-view'
 
 function Splash() {
   return (
@@ -203,6 +204,8 @@ export function ChatApp() {
               <SavedView />
             ) : view === 'integrations' ? (
               <IntegrationsView />
+            ) : view === 'connectors' ? (
+              <ConnectorsView />
             ) : (
               <>
                 <ChannelHeader />

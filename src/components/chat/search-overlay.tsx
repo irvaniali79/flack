@@ -15,6 +15,7 @@ import type { ChannelDTO, MessageDTO, UserDTO } from '@/lib/types'
 import { api } from '@/lib/api'
 import { formatRelativeTime } from '@/lib/time'
 import { UserAvatar } from './avatar'
+import { AppBadge } from './connectors/connector-icon'
 
 interface SearchResults {
   messages: (MessageDTO & { channelName?: string })[]
@@ -303,7 +304,10 @@ export function SearchOverlay() {
               >
                 <UserAvatar user={user} size="sm" />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold">{user.name}</span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="truncate text-sm font-semibold">{user.name}</span>
+                    {user.kind === 'app' && <AppBadge className="shrink-0" />}
+                  </span>
                   <span className="block truncate text-xs text-muted-foreground">
                     {user.title ?? (user.kind === 'agent' ? 'AI agent' : '')}
                   </span>

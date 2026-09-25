@@ -46,7 +46,7 @@ import {
 } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { useChatStore } from '@/lib/store'
-import type { MessageDTO } from '@/lib/types'
+import type { ConnectorMessagePayload, MessageDTO } from '@/lib/types'
 import { formatBytes } from '@/lib/api'
 import { formatTime, formatTimeHover } from '@/lib/time'
 import { MarkdownBody } from '@/lib/markdown'
@@ -54,8 +54,70 @@ import { useCustomEmojiStore, isCustomEmojiToken, customEmojiName } from '@/lib/
 import { UserAvatar } from './avatar'
 import { FileIcon } from './file-icon'
 import { EmojiPicker } from './emoji-picker'
+import { AppBadge, CONNECTOR_BRAND, ConnectorTile, brandTextColor } from './connectors/connector-icon'
 
 const QUICK_REACTIONS = ['👍', '🎉', '👀', '❤️']
+
+/** Rich app-card body for connector messages — the payload replaces the
+ *  plain-text body visually (the text itself stays for search + previews). */
+function ConnectorAppCard({
+  payload,
+  color,
+}: {
+  payload: ConnectorMessagePayload
+  color: string
+}) {
+  return (
+    <div
+      className="mt-1 max-w-xl rounded-xl border border-border/80 p-3"
+      style={{
+        borderLeft: `3px solid ${color}`,
+        background: `linear-gradient(135deg, ${color}0f 0%, transparent 60%)`,
+      }}
+    >
+      <p className="text-[13px] font-bold leading-snug">{payload.title}</p>
+      {payload.fields.length > 0 && (
+        <dl className="mt-2 space-y-1">
+          {payload.fields.map((field) => (
+            <div key={field.label} className="flex gap-2 text-xs leading-snug">
+              <dt className="w-24 shrink-0 text-muted-foreground">{field.label}</dt>
+              <dd className="min-w-0 flex-1 break-words">{field.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {payload.actions.length > 0 && (
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
+          {payload.actions.map((action) =>
+            action.style === 'primary' ? (
+              <button
+                key={action.label}
+                type="button"
+                onClick={() => toast.info('Demo action — connectors are simulated in this sandbox')}
+                className="rounded-lg px-3 py-1 text-xs font-semibold shadow-sm transition-transform duration-100 hover:scale-[1.03] active:scale-95"
+                style={{ backgroundColor: color, color: brandTextColor(color) }}
+              >
+                {action.label}
+              </button>
+            ) : (
+              <button
+                key={action.label}
+                type="button"
+                onClick={() => toast.info('Demo action — connectors are simulated in this sandbox')}
+                className="rounded-lg border border-border bg-background px-3 py-1 text-xs font-semibold text-foreground/85 transition-colors duration-100 hover:bg-accent"
+              >
+                {action.label}
+              </button>
+            ),
+          )}
+        </div>
+      )}
+      {payload.footer && (
+        <p className="mt-2 text-[10px] leading-snug text-muted-foreground">{payload.footer}</p>
+      )}
+    </div>
+  )
+}
 
 export const MessageItem = memo(function MessageItem({
   message,
@@ -116,6 +178,16 @@ export const MessageItem = memo(function MessageItem({
   const mentionsMe =
     !!me && (message.mentions.userIds.includes(me.id) || message.mentions.specials.length > 0)
   const isAgent = sender?.kind === 'agent'
+  const isApp = sender?.kind === 'app'
+  // Connector (app) messages render a rich card instead of the plain body
+  const connector = message.connectorId
+    ? (CONNECTOR_BRAND[message.connectorId] ?? {
+        icon: '',
+        color: sender?.avatarColor ?? '#71717a',
+        name: sender?.name ?? message.connectorId,
+      })
+    : undefined
+  const appPayload = message.connectorPayload
   const deleted = !!message.deletedAt
   const canEdit = isMine && !deleted
   const canDelete = (isMine || isAdmin) && !deleted
@@ -204,7 +276,11 @@ export const MessageItem = memo(function MessageItem({
             onClick={() => setProfileUserId(sender.id)}
             className="transition-transform duration-150 hover:scale-105"
           >
-            <UserAvatar user={sender} size="md" />
+            {connector ? (
+              <ConnectorTile icon={connector.icon} color={connector.color} size="md" />
+            ) : (
+              <UserAvatar user={sender} size="md" />
+            )}
           </button>
         ) : (
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-xs font-bold text-muted-foreground">
@@ -232,6 +308,7 @@ export const MessageItem = memo(function MessageItem({
                 <Sparkles className="h-2.5 w-2.5" aria-hidden /> AI
               </span>
             )}
+            {isApp && <AppBadge />}
             <time
               dateTime={message.createdAt}
               title={formatTimeHover(message.createdAt)}
@@ -276,14 +353,18 @@ export const MessageItem = memo(function MessageItem({
           </>
         )}
 
-        <MarkdownBody
-          body={message.body}
-          users={users}
-          channels={channels}
-          onOpenProfile={(userId) => setProfileUserId(userId)}
-          onOpenChannel={(channelId) => void useChatStore.getState().openChannel(channelId)}
-          className="min-w-0"
-        />
+        {connector && appPayload ? (
+          <ConnectorAppCard payload={appPayload} color={connector.color} />
+        ) : (
+          <MarkdownBody
+            body={message.body}
+            users={users}
+            channels={channels}
+            onOpenProfile={(userId) => setProfileUserId(userId)}
+            onOpenChannel={(channelId) => void useChatStore.getState().openChannel(channelId)}
+            className="min-w-0"
+          />
+        )}
 
         {/* files */}
         {message.files.length > 0 && (

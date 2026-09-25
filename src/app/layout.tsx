@@ -40,6 +40,16 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
+        {/* Pre-paint accent theme — reads localStorage before first paint so the
+            app (and the login screen) never flashes the default green. The store
+            reconciles this guess with the profile value once /api/bootstrap
+            resolves. Must stay the first child of <body>. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(){try{var a=localStorage.getItem('acme-accent');if(typeof a==='string'&&a)document.documentElement.dataset.accent=a}catch(e){}})()",
+          }}
+        />
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"

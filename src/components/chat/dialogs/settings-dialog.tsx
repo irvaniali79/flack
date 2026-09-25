@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useTheme } from 'next-themes'
 import { toast } from 'sonner'
-import { BellOff, Check, Clock, Mail, MoonStar, Monitor, Moon, ShieldCheck, Smile, Sun } from 'lucide-react'
+import { BellOff, Check, Clock, Hash, Mail, MoonStar, Monitor, Moon, ShieldCheck, Smile, Sun } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -25,6 +25,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import { useChatStore } from '@/lib/store'
+import { ACCENT_THEMES, DEFAULT_ACCENT } from '@/lib/theme-options'
 import { localTimezoneLabel } from '@/lib/time'
 import { formatHHmm, isQuietHours, quietUntilLabel } from '@/lib/dnd'
 import { UserAvatar } from '../avatar'
@@ -62,6 +63,7 @@ export function SettingsDialog() {
   const setOpen = useChatStore((s) => s.setSettingsOpen)
   const me = useChatStore((s) => s.me)
   const updateMe = useChatStore((s) => s.updateMe)
+  const setAccentTheme = useChatStore((s) => s.setAccentTheme)
   const { theme, setTheme } = useTheme()
 
   // ── profile form (reset when the dialog is (re)opened) ─────────────────────
@@ -93,6 +95,7 @@ export function SettingsDialog() {
   if (!me) return null
 
   const activeTheme = theme ?? 'dark'
+  const activeAccent = me.accentTheme ?? DEFAULT_ACCENT
 
   const saveProfile = async () => {
     if (busy) return
@@ -473,6 +476,100 @@ export function SettingsDialog() {
                 ? 'Acme Chat follows your operating system setting — switch it and the app follows along.'
                 : `You're viewing Acme Chat in ${activeTheme} mode.`}
             </p>
+
+            {/* ── Accent color (Slack-style theme picker) ────────────────── */}
+            <div className="space-y-2.5 border-t border-border pt-4">
+              <div className="space-y-1">
+                <Label>Accent color</Label>
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  Personalize Acme Chat — saved to your profile, so your accent
+                  follows you on every device.
+                </p>
+              </div>
+
+              {/* Live preview strip — every element below is painted with the
+                  accent utilities, so the whole strip recolors instantly. */}
+              <div
+                className="rounded-xl border border-border bg-muted/30 p-3"
+                role="img"
+                aria-label="Live preview of the accent color on a channel row, unread badge, button, presence dot, typing indicator, link and chip"
+              >
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Preview
+                </p>
+                <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-2.5">
+                  <span className="flex items-center gap-1.5 rounded-lg bg-muted px-2 py-1.5">
+                    <Hash className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                    <span className="text-xs font-medium">general</span>
+                    <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-500 px-1 text-[10px] font-bold leading-none text-white">
+                      3
+                    </span>
+                  </span>
+                  <span className="inline-flex h-7 items-center rounded-md bg-emerald-600 px-3 text-xs font-semibold text-white">
+                    Send
+                  </span>
+                  <span className="presence-pulse h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                  <span className="flex items-center gap-1" aria-hidden>
+                    <span className="typing-dot h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    <span className="typing-dot h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    <span className="typing-dot h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  </span>
+                  <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                    View thread
+                  </span>
+                  <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
+                    New
+                  </span>
+                </div>
+              </div>
+
+              {/* Theme options */}
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                {ACCENT_THEMES.map((accent) => {
+                  const active = activeAccent === accent.key
+                  return (
+                    <button
+                      key={accent.key}
+                      type="button"
+                      aria-pressed={active}
+                      aria-label={`${accent.name} accent`}
+                      title={accent.name}
+                      onClick={() => void setAccentTheme(accent.key)}
+                      className={cn(
+                        'relative flex flex-col gap-2 rounded-xl border p-2.5 text-left transition-all duration-150',
+                        active
+                          ? 'border-emerald-500/60 bg-emerald-500/5 ring-2 ring-emerald-500/70'
+                          : 'border-border hover:border-emerald-500/40 hover:bg-accent',
+                      )}
+                    >
+                      {active && (
+                        <span
+                          className="absolute right-2 top-2 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-white"
+                          aria-hidden
+                        >
+                          <Check className="h-2.5 w-2.5" strokeWidth={3.5} />
+                        </span>
+                      )}
+                      <span className="flex items-center gap-1.5" aria-hidden>
+                        {accent.swatches.map((hex) => (
+                          <span
+                            key={hex}
+                            className="h-3.5 w-3.5 rounded-full border border-black/10 shadow-sm dark:border-white/20"
+                            style={{ backgroundColor: hex }}
+                          />
+                        ))}
+                      </span>
+                      <span className="min-w-0 pr-4">
+                        <span className="block truncate text-xs font-semibold">{accent.name}</span>
+                        <span className="mt-0.5 block text-[10px] leading-tight text-muted-foreground">
+                          {accent.vibe}
+                        </span>
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
           </TabsContent>
         </Tabs>
       </DialogContent>

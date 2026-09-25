@@ -24,6 +24,7 @@ import { useChatStore } from '@/lib/store'
 import { localTimeIn, localTimezoneLabel } from '@/lib/time'
 import { UserAvatar } from '../avatar'
 import { PresenceDot } from '../presence-dot'
+import { AppBadge } from '../connectors/connector-icon'
 
 const STATUS_EMOJIS = ['🎯', '☕', '🎨', '🚀', '🌴', '🧠', '🎧', '🏗️', '📋', '🔬', '💤', '🤖', '🔥', '🌱', '✈️', '🦁', '', '😀']
 
@@ -221,6 +222,7 @@ export function ProfileDialog() {
                       <Sparkles className="h-2.5 w-2.5" aria-hidden /> AI Agent
                     </span>
                   )}
+                  {user.kind === 'app' && <AppBadge />}
                   {user.role !== 'member' && (
                     <span className="rounded bg-muted px-1.5 py-px text-[10px] font-bold uppercase text-muted-foreground">
                       {user.role}

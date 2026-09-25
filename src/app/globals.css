@@ -112,6 +112,176 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* ─── Accent color themes (Slack-style theme picker) ─────────────────────────
+   The app's accent is expressed through emerald-* utilities, which compile to
+   var(--color-emerald-*) references — so overriding those custom properties on
+   <html data-accent='<key>'> recolors the entire app: logo tile, rail
+   indicators, buttons, badges, unread pills, presence dots, focus rings,
+   typing dots, splash… Keys mirror src/lib/theme-options.ts (keep in sync).
+   'emerald' (the default) defines no override — Tailwind's palette applies.
+   These blocks are intentionally UNLAYERED: unlayered rules beat the
+   @layer theme defaults regardless of the :root specificity tie, and
+   .dark[data-accent] (0,2,0) outranks [data-accent] (0,1,0).
+   Dark mode deliberately reuses the same ramps — dark contexts only reach
+   for shades 300–600, and every ramp below stays readable on the dark
+   background (QA-verified for all 11 themes). */
+
+[data-accent='aubergine'] {
+  --color-emerald-50: #faf5ff;
+  --color-emerald-100: #f3e8ff;
+  --color-emerald-200: #e9d5ff;
+  --color-emerald-300: #d8b4fe;
+  --color-emerald-400: #c084fc;
+  --color-emerald-500: #a855f7;
+  --color-emerald-600: #9333ea;
+  --color-emerald-700: #7e22ce;
+  --color-emerald-800: #6b21a8;
+  --color-emerald-900: #581c87;
+  --color-emerald-950: #3b0764;
+}
+
+[data-accent='cherry'] {
+  --color-emerald-50: #fff1f2;
+  --color-emerald-100: #ffe4e6;
+  --color-emerald-200: #fecdd3;
+  --color-emerald-300: #fda4af;
+  --color-emerald-400: #fb7185;
+  --color-emerald-500: #f43f5e;
+  --color-emerald-600: #e11d48;
+  --color-emerald-700: #be123c;
+  --color-emerald-800: #9f1239;
+  --color-emerald-900: #881337;
+  --color-emerald-950: #4c0519;
+}
+
+[data-accent='tangerine'] {
+  --color-emerald-50: #fff7ed;
+  --color-emerald-100: #ffedd5;
+  --color-emerald-200: #fed7aa;
+  --color-emerald-300: #fdba74;
+  --color-emerald-400: #fb923c;
+  --color-emerald-500: #f97316;
+  --color-emerald-600: #ea580c;
+  --color-emerald-700: #c2410c;
+  --color-emerald-800: #9a3412;
+  --color-emerald-900: #7c2d12;
+  --color-emerald-950: #431407;
+}
+
+[data-accent='honey'] {
+  --color-emerald-50: #fffbeb;
+  --color-emerald-100: #fef3c7;
+  --color-emerald-200: #fde68a;
+  --color-emerald-300: #fcd34d;
+  --color-emerald-400: #fbbf24;
+  --color-emerald-500: #f59e0b;
+  --color-emerald-600: #d97706;
+  --color-emerald-700: #b45309;
+  --color-emerald-800: #92400e;
+  --color-emerald-900: #78350f;
+  --color-emerald-950: #451a03;
+}
+
+[data-accent='seafoam'] {
+  --color-emerald-50: #f0fdfa;
+  --color-emerald-100: #ccfbf1;
+  --color-emerald-200: #99f6e4;
+  --color-emerald-300: #5eead4;
+  --color-emerald-400: #2dd4bf;
+  --color-emerald-500: #14b8a6;
+  --color-emerald-600: #0d9488;
+  --color-emerald-700: #0f766e;
+  --color-emerald-800: #115e59;
+  --color-emerald-900: #134e4a;
+  --color-emerald-950: #042f2e;
+}
+
+[data-accent='grape'] {
+  --color-emerald-50: #f5f3ff;
+  --color-emerald-100: #ede9fe;
+  --color-emerald-200: #ddd6fe;
+  --color-emerald-300: #c4b5fd;
+  --color-emerald-400: #a78bfa;
+  --color-emerald-500: #8b5cf6;
+  --color-emerald-600: #7c3aed;
+  --color-emerald-700: #6d28d9;
+  --color-emerald-800: #5b21b6;
+  --color-emerald-900: #4c1d95;
+  --color-emerald-950: #2e1065;
+}
+
+[data-accent='moss'] {
+  --color-emerald-50: #f7fee7;
+  --color-emerald-100: #ecfccb;
+  --color-emerald-200: #d9f99d;
+  --color-emerald-300: #bef264;
+  --color-emerald-400: #a3e635;
+  --color-emerald-500: #84cc16;
+  --color-emerald-600: #65a30d;
+  --color-emerald-700: #4d7c0f;
+  --color-emerald-800: #3f6212;
+  --color-emerald-900: #365314;
+  --color-emerald-950: #1a2e05;
+}
+
+[data-accent='brick'] {
+  --color-emerald-50: #fef2f2;
+  --color-emerald-100: #fee2e2;
+  --color-emerald-200: #fecaca;
+  --color-emerald-300: #fca5a5;
+  --color-emerald-400: #f87171;
+  --color-emerald-500: #ef4444;
+  --color-emerald-600: #dc2626;
+  --color-emerald-700: #b91c1c;
+  --color-emerald-800: #991b1b;
+  --color-emerald-900: #7f1d1d;
+  --color-emerald-950: #450a0a;
+}
+
+/* Custom warm-brown ramp (no Tailwind equivalent) */
+[data-accent='cocoa'] {
+  --color-emerald-50: #faf6f2;
+  --color-emerald-100: #f0e6dc;
+  --color-emerald-200: #e2cec0;
+  --color-emerald-300: #d1b096;
+  --color-emerald-400: #bf9471;
+  --color-emerald-500: #b07d54;
+  --color-emerald-600: #96683f;
+  --color-emerald-700: #7c5634;
+  --color-emerald-800: #654528;
+  --color-emerald-900: #523720;
+  --color-emerald-950: #362417;
+}
+
+[data-accent='ocean'] {
+  --color-emerald-50: #ecfeff;
+  --color-emerald-100: #cffafe;
+  --color-emerald-200: #a5f3fc;
+  --color-emerald-300: #67e8f9;
+  --color-emerald-400: #22d3ee;
+  --color-emerald-500: #06b6d4;
+  --color-emerald-600: #0891b2;
+  --color-emerald-700: #0e7490;
+  --color-emerald-800: #155e75;
+  --color-emerald-900: #164e63;
+  --color-emerald-950: #083344;
+}
+
+/* Custom rose↔red blend */
+[data-accent='coral'] {
+  --color-emerald-50: #fef1f2;
+  --color-emerald-100: #fee3e4;
+  --color-emerald-200: #fecbce;
+  --color-emerald-300: #fda4aa;
+  --color-emerald-400: #fa717b;
+  --color-emerald-500: #f14151;
+  --color-emerald-600: #df2137;
+  --color-emerald-700: #bb172c;
+  --color-emerald-800: #9c162a;
+  --color-emerald-900: #83182a;
+  --color-emerald-950: #480711;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -162,7 +332,8 @@
 .typing-dot:nth-child(3) { animation-delay: 0.3s; }
 
 @keyframes flash-highlight {
-  0% { background-color: oklch(0.705 0.16 162.48 / 0.18); }
+  /* Follows the accent theme — emerald-* vars are overridden by [data-accent] */
+  0% { background-color: color-mix(in srgb, var(--color-emerald-500) 18%, transparent); }
   100% { background-color: transparent; }
 }
 .flash-highlight {
@@ -171,8 +342,8 @@
 
 /* Subtle presence pulse — only while online (scale + halo) */
 @keyframes presence-pulse {
-  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 oklch(0.696 0.17 162.48 / 0.45); }
-  50% { transform: scale(1.35); box-shadow: 0 0 0 4px oklch(0.696 0.17 162.48 / 0); }
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-emerald-500) 45%, transparent); }
+  50% { transform: scale(1.35); box-shadow: 0 0 0 4px transparent; }
 }
 .presence-pulse {
   animation: presence-pulse 2.4s ease-in-out infinite;
@@ -191,8 +362,8 @@
   50% { transform: rotate(4deg); }
 }
 
-/* Focus-visible ring in emerald for keyboard nav */
+/* Focus-visible ring in the accent color for keyboard nav */
 :focus-visible {
-  outline: 2px solid oklch(0.696 0.17 162.48);
+  outline: 2px solid var(--color-emerald-500);
   outline-offset: 1px;
 }

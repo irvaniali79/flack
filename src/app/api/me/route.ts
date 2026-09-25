@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { db } from '@/lib/db'
 import { handle, HttpError, requireUser } from '@/lib/auth'
 import { serializeUser } from '@/lib/serialize'
+import { ACCENT_KEYS } from '@/lib/theme-options'
 
 export async function GET() {
   return handle(async () => {
@@ -24,6 +25,8 @@ const patchSchema = z.object({
   timezone: z.string().trim().max(64).optional(),
   // off | digest — whether released quiet-hour digests also go to email
   emailNotif: z.enum(['off', 'digest']).optional(),
+  // Accent color theme key (validated against the catalog)
+  accentTheme: z.string().refine((v) => (ACCENT_KEYS as string[]).includes(v), 'Unknown theme').optional(),
 })
 
 export async function PATCH(request: Request) {

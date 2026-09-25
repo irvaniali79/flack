@@ -7,7 +7,7 @@ export interface UserDTO {
   email?: string
   title: string | null
   avatarColor: string
-  kind: 'human' | 'agent'
+  kind: 'human' | 'agent' | 'app'
   role: 'owner' | 'admin' | 'member'
   statusEmoji: string | null
   statusText: string | null
@@ -21,6 +21,8 @@ export interface UserDTO {
   isActive: boolean
   handle?: string // agents only
   timezone?: string
+  /** Accent color theme key (lib/theme-options.ts) */
+  accentTheme?: string
 }
 
 export interface ReactionDTO {
@@ -43,6 +45,15 @@ export interface MessageMentions {
   specials: string[] // "@channel" | "@here"
 }
 
+/** Rich app-card content attached to connector (app) messages */
+export interface ConnectorMessagePayload {
+  event: string
+  title: string
+  fields: { label: string; value: string }[]
+  actions: { label: string; style: 'primary' | 'default' }[]
+  footer?: string
+}
+
 export interface MessageDTO {
   id: string
   channelId: string
@@ -57,6 +68,9 @@ export interface MessageDTO {
   createdAt: string
   reactions: ReactionDTO[]
   files: FileDTO[]
+  /** Present when posted by a connector — rendered as a rich app card */
+  connectorId: string | null
+  connectorPayload: ConnectorMessagePayload | null
 }
 
 export interface ChannelDTO {
@@ -235,4 +249,43 @@ export interface McpToolInfo {
   name: string
   description: string
   inputSchema: Record<string, unknown>
+}
+
+// ─── Connectors (Slack-style app directory) ──────────────────────────────────
+
+export interface ConnectorEventInfoDTO {
+  id: string
+  label: string
+  description: string
+  defaultOn: boolean
+}
+
+export interface ConnectorDefDTO {
+  id: string
+  name: string
+  tagline: string
+  description: string
+  category: string
+  /** icon key — client maps to a lucide component */
+  icon: string
+  /** brand hex for the app tile */
+  color: string
+  scopes: string[]
+  sampleAccounts: string[]
+  events: ConnectorEventInfoDTO[]
+  /** active connections for this connector in the viewer's org */
+  connectedCount: number
+}
+
+export interface ConnectorConnectionDTO {
+  id: string
+  connectorId: string
+  accountLabel: string
+  /** { eventId: enabled } map from the connector's catalog */
+  eventSubs: Record<string, boolean>
+  channel: { id: string; name: string; slug: string; kind: string }
+  appUser: { id: string; name: string; avatarColor: string }
+  connectedBy: string | null
+  status: string
+  createdAt: string
 }
