@@ -134,7 +134,8 @@ export function ChatApp() {
     <div className="flex h-dvh w-full overflow-hidden bg-background">
       {!isMobile && <Rail />}
       {!isMobile && (
-        <aside className="hidden w-64 shrink-0 border-r border-border md:block" aria-label="Channels sidebar">
+        // `dark` class — the sidebar chrome is mode-independent (saturated in light & dark)
+        <aside className="dark hidden w-64 shrink-0 border-r border-border md:block" aria-label="Channels sidebar">
           <Sidebar onNavigate={() => setView('chat')} />
         </aside>
       )}

@@ -104,7 +104,7 @@ function SnoozeMenu({ onSnooze }: { onSnooze: (preset: { minutes?: number; until
         <button
           type="button"
           aria-label="Snooze notification"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity duration-150 hover:bg-accent-surface-hover hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity duration-150 hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
         >
           <Clock className="h-3.5 w-3.5" aria-hidden />
         </button>
@@ -121,7 +121,7 @@ function SnoozeMenu({ onSnooze }: { onSnooze: (preset: { minutes?: number; until
               onSnooze(preset.minutes !== undefined ? { minutes: preset.minutes } : { until: preset.until })
               setOpen(false)
             }}
-            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] transition-colors duration-150 hover:bg-accent-surface-hover"
+            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] transition-colors duration-150 hover:bg-accent"
           >
             <Clock className="h-3 w-3 text-muted-foreground" aria-hidden />
             {preset.label}
@@ -231,7 +231,7 @@ function NotificationBell() {
                 <div
                   key={notification.id}
                   className={cn(
-                    'group flex items-start gap-1 rounded-lg px-2 py-2 transition-colors duration-150 hover:bg-accent-surface-hover',
+                    'group flex items-start gap-1 rounded-lg px-2 py-2 transition-colors duration-150 hover:bg-accent',
                     !notification.readAt && 'bg-emerald-500/5',
                   )}
                 >
@@ -297,7 +297,7 @@ function NotificationBell() {
                           void markNotificationsRead([notification.id])
                           setOpen(false)
                         }}
-                        className="flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left opacity-70 transition-all duration-150 hover:bg-accent-surface-hover hover:opacity-100"
+                        className="flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left opacity-70 transition-all duration-150 hover:bg-accent hover:opacity-100"
                       >
                         <span
                           className={cn(
@@ -607,7 +607,10 @@ export function Sidebar({
   }
 
   return (
-    <div className="flex h-full w-full flex-col bg-accent-surface">
+    // `dark` class — the whole sidebar chrome renders the saturated dark token
+    // set in BOTH light & dark mode (user-requested: identical sidebar colors
+    // across modes; text/badges/variants resolve from the scoped .dark rules).
+    <div className="dark flex h-full w-full flex-col bg-accent-surface">
       {/* org header */}
       <div className="flex items-center gap-1 px-2.5 pb-2 pt-3">
         <DropdownMenu>
@@ -692,7 +695,7 @@ export function Sidebar({
         <button
           type="button"
           onClick={() => setSearchOpen(true)}
-          className="flex w-full items-center gap-2 rounded-lg border border-transparent bg-accent-field px-2.5 py-1.5 text-sm text-foreground/75 transition-all duration-150 hover:border-border hover:bg-accent-surface-hover-surface-hover focus-visible:border-emerald-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30 dark:text-zinc-300 dark:focus-visible:border-emerald-400/40"
+          className="flex w-full items-center gap-2 rounded-lg border border-transparent bg-accent-field px-2.5 py-1.5 text-sm text-foreground/75 transition-all duration-150 hover:border-border hover:bg-accent-surface-hover focus-visible:border-emerald-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30 dark:text-zinc-300 dark:focus-visible:border-emerald-400/40"
         >
           <Search className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
           <span className="flex-1 text-left">Search…</span>
@@ -716,7 +719,7 @@ export function Sidebar({
             'flex w-full items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm transition-all duration-150',
             view === 'saved'
               ? 'border-emerald-500/40 bg-emerald-600/15 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
-              : 'border-transparent bg-accent-field text-foreground/80 hover:border-border hover:bg-accent-surface-hover-surface-hover',
+              : 'border-transparent bg-accent-field text-foreground/80 hover:border-border hover:bg-accent-surface-hover',
           )}
         >
           <Bookmark

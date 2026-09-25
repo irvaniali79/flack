@@ -53,8 +53,12 @@
   --radius: 0.625rem;
   /* ── Themed surfaces ── derived from the ACTIVE accent ramp (--color-emerald-*),
      so they auto-adapt when [data-accent] overrides the ramp. The canvas itself
-     (--background) carries a whisper of the hue; the sidebar/rail/fields carry
-     a stronger tint (Slack-style theme coverage of the whole UI). */
+     (--background) carries a whisper of the hue. The SIDEBAR CHROME (rail +
+     sidebar) deliberately renders the saturated .dark formulas below in BOTH
+     modes — it carries a scoped `dark` class (rail.tsx / sidebar.tsx / app.tsx),
+     so the left chrome looks identical in light & dark mode, Slack-style;
+     the light values here remain as canvas-adjacent fallbacks for portaled
+     surfaces that borrow the utilities outside the chrome scope. */
   --background: color-mix(in oklab, var(--color-emerald-100) 40%, white);
   --accent-surface: color-mix(in oklab, var(--color-emerald-100) 55%, white);
   --accent-surface-2: color-mix(in oklab, var(--color-emerald-100) 85%, white);
@@ -95,9 +99,13 @@
 
 .dark {
   --background: color-mix(in oklab, var(--color-emerald-950) 18%, #0b0b0d);
-  --accent-surface: color-mix(in oklab, var(--color-emerald-950) 42%, #121216);
-  --accent-surface-2: color-mix(in oklab, var(--color-emerald-950) 58%, #0a0a0d);
-  --accent-surface-hover: color-mix(in oklab, var(--color-emerald-900) 26%, #1e1e23);
+  /* Sidebar chrome surfaces — SATURATED (visibly colored, Slack-style) and
+     mode-independent: the rail/sidebar carry a scoped `dark` class, so these
+     values drive the chrome in light mode too. Deeper shades mixed into
+     near-black keep text contrast while the hue reads clearly. */
+  --accent-surface: color-mix(in oklab, var(--color-emerald-900) 38%, #121216);
+  --accent-surface-2: color-mix(in oklab, var(--color-emerald-900) 40%, #060609);
+  --accent-surface-hover: color-mix(in oklab, var(--color-emerald-700) 38%, #17171d);
   --accent-field: color-mix(in oklab, var(--color-emerald-950) 38%, #242429);
   --accent-deep: color-mix(in oklab, var(--color-emerald-950) 60%, #09090b);
   --foreground: oklch(0.985 0 0);

@@ -738,3 +738,42 @@ Stage Summary:
 - Intentional neutrals kept: UnreadBadge (zinc), presence-offline dot, AI badge (amber), mention badge (rose), dialogs/popovers (card/popover) — semantic/contrast decisions.
 - Login: sarah@acme.test / demo1234. Browser QA via http://localhost:81. lint 0 errors · 0 console errors · demo state dark+emerald.
 - Next-phase candidates (carryover): scheduler-driven connector events, emoji autocomplete, connector slash-commands, multi-channel connector routing, admin connector overview, theme quick-switcher in profile menu.
+
+---
+Task ID: 21
+Agent: main (Z.ai Code)
+Task: User request — "place it in root". Relocate the Task 18 project zip deliverable (and its SETUP.md companion) from /download/ to the project root.
+
+Work Log:
+- Confirmed prerequisite state: Task 20 (theme engine v2) was already complete + verified; the zip at download/acme-chat-project.zip (built 19:36) postdated all source changes → no rebuild needed for the move itself.
+- Bloat protection FIRST (Task 19 lesson): added `/*.zip` to .gitignore BEFORE moving the file, so the periodic auto-commit system can never swallow the 6.5MB archive into git history again.
+- Moved download/acme-chat-project.zip → /home/z/my-project/acme-chat-project.zip and download/SETUP.md → /home/z/my-project/SETUP.md (deliverable pair now top-level; download/ keeps only the env README).
+- Committed tracked changes (.gitignore + SETUP.md at root) as 9038d62 "Deliverables at repo root"; zip correctly ignored (git status shows only the two tracked files).
+- Health check: :3000 and chat-service :3003 both 200; dev.log clean; agent-browser session root21 confirmed login screen + full app render with 0 page/console errors.
+- Later in this round: REBUILT the zip at root (6.6MB, integrity OK) so it includes Task 22's sidebar-theme changes — new canonical pack command (note the root-zip self-exclusion): cd /home/z && rm -f my-project/acme-chat-project.zip && zip -r -q my-project/acme-chat-project.zip my-project -x "my-project/node_modules/*" "my-project/.next/*" "my-project/skills/*" "my-project/tool-results/*" "my-project/download/*" "my-project/dev.log" "my-project/acme-chat-project.zip" "my-project/mini-services/*/node_modules/*" && zip -r -q my-project/acme-chat-project.zip my-project/.git. Bonus: SETUP.md at root now ships INSIDE the archive too (self-contained quickstart).
+
+Stage Summary:
+- DELIVERABLE: /home/z/my-project/acme-chat-project.zip (6.6MB) + SETUP.md at the project root, git-protected via /*.zip ignore.
+- Future re-packs MUST keep the "my-project/acme-chat-project.zip" exclusion (the archive now lives inside the tree it archives).
+
+---
+Task ID: 22
+Agent: main (Z.ai Code)
+Task: User request — "keep sidebar colours same in dark and light mode (more saturated like in dark mode)". Make the left chrome (rail + sidebar) render IDENTICAL saturated colors in both modes, Slack-style.
+
+Work Log:
+- SURVEY: Task 20's engine had mode-dependent sidebar surfaces — light mode = pale pastel tints (chroma ~0.01-0.011), dark mode = dark tinted grays (chroma ~0.02-0.034). User wants one shared saturated look across modes.
+- ARCHITECTURE (zero new tokens): the `dark:` variant is class-based (`@custom-variant dark (&:is(.dark *))`), so adding a literal `dark` class to the chrome containers opts the ENTIRE subtree into the existing .dark token set (light text, dark borders/inputs, all dark: variants) in BOTH modes: sidebar.tsx root div, rail.tsx container, app.tsx desktop aside wrapper. Portaled overlays (dropdowns, popovers, tooltips, dialogs) escape the scope and stay mode-appropriate.
+- SATURATION BUMP in globals.css .dark block (single source of truth for the chrome now): --accent-surface = emerald-900 38% + #121216 (sidebar), --accent-surface-2 = emerald-900 40% + #060609 (rail, deeper + more chromatic), --accent-surface-hover = emerald-700 38% + #17171d (clearly visible themed hover). Formulas are derived from the accent ramp → all 12 themes get the treatment for free. Light-mode :root surface values kept only as fallbacks for portaled borrowers.
+- DECOUPLED portaled popover hovers from chrome surfaces: notification rows + snooze menu buttons (sidebar.tsx, 4 sites) now use standard hover:bg-accent (mode-appropriate zinc) instead of hover:bg-accent-surface-hover — they render at body level where the scoped .dark doesn't reach.
+- BUG FIX (pre-existing, found in QA): hover:bg-accent-surface-hover-surface-hover mangled class on the sidebar Search + Saved items buttons (broken since Task 20) → corrected to hover:bg-accent-surface-hover.
+- MEASURED RESULTS (computed styles): sidebar LIGHT == DARK byte-identical — emerald oklab(0.2577 -0.0274 0.0008) (chroma 0.027 vs old dark 0.020, +35%; old light was near-zero), aubergine oklab(0.2588 0.0375 -0.0565) (chroma 0.068 — DOUBLE the old dark 0.034); rail deeper (L 0.226) + more chromatic; canvas still mode-dependent (0.98 light / 0.17 dark). Active row: themed pill oklab(0.627 0.13 -0.193 / 0.15) + emerald-300 text (dark: variant via scope). Mobile drawer renders the identical chrome; its close button stays canvas-styled (outside scope).
+- VLM: aubergine LIGHT "visibly saturated deep purple, intentional and polished Slack-style, no glitches"; aubergine DARK 10/10; emerald LIGHT 9/10 "saturated dark green, not pale"; mobile drawer 10/10.
+- QA DETOUR — "dead hovers" investigation (IMPORTANT for future rounds): hover styles appeared broken (rule exists, class present, :hover true, var resolves — but no paint, verified visually). ROOT CAUSE: Tailwind v4 wraps every hover: variant in @media (hover: hover), and the headless QA browser reports (hover: hover)=false (touch-pointer emulation). Hovers work fine for real desktop users; the QA browser simply cannot exercise them. Verified the hover VALUES instead via class-forcing probes (paints oklab(0.317, 0.0495, -0.0835) on aubergine — saturated lift) and via the rail active chip. Do NOT "fix" this — it is correct framework behavior.
+- Cleanup: lint 0 errors, tsc clean (src/), 0 console/page errors across sessions root21 + fresh22; demo state restored (dark + emerald, DB accentTheme patched back after aubergine QA).
+
+Stage Summary:
+- SHIPPED: mode-independent saturated sidebar chrome — rail + sidebar now render the SAME visibly-colored surface in light & dark mode (user request), with all 12 accent themes covered via derived formulas, and light text/badges/variants auto-flipping through the scoped .dark class.
+- ARCHITECTURE NOTE: the chrome = anything inside the `dark`-classed containers (sidebar root, rail container, desktop aside). New chrome surfaces should keep using bg-accent-surface / -2 / -hover tokens; anything portaled must NOT rely on chrome tokens. Tailwind v4 gates hover: behind @media (hover: hover) — untestable in agent-browser (emulates touch); use class-forcing probes to verify hover colors.
+- Login: sarah@acme.test / demo1234 (owner). Browser QA via http://localhost:81. Demo state: dark + emerald.
+- Next-phase candidates (carryover): scheduler-driven connector events, emoji autocomplete in composer, connector slash-commands, per-connector multi-channel routing, admin connector overview, accent theme quick-switcher in profile menu.
