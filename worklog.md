@@ -667,3 +667,22 @@ Stage Summary:
 - Architecture notes for future rounds: lib/connectors.ts is server-only (client mirror = CONNECTOR_BRAND in connector-icon.tsx; adding a connector needs a one-line addition there); /api/connectors/[id] doubles as catalog-id (subpath /connect) and connection-id; connections are soft-disconnected (rows kept, reconnect revives); app users never log in; theme mechanism = [data-accent] overriding --color-emerald-* (Tailwind v4 var-based utilities, verified).
 - Login: sarah@acme.test / demo1234 (owner) · priya@acme.test / demo1234 (member, Connect disabled). Browser QA ALWAYS via http://localhost:81. After db:push restart the dev server. Tick header x-tick-secret: dev-tick-secret.
 - NEXT-PHASE CANDIDATES (priority order): (1) scheduler-driven connector events (Google Calendar meeting reminders actually firing via the 60s tick — the natural completion of connectors), (2) emoji autocomplete in the composer (":" → shortcode popup with alias support, carried from Round 16), (3) connector slash-commands (/gcal tomorrow, /github list PRs — MCP tool surface reuse), (4) per-connector event routing to multiple channels (one connection → N channels), (5) admin connector overview in the admin dashboard (install audit view), (6) accent theme quick-switcher in the profile menu (one click, no dialog). Risks: connector "actions" are demo toasts only (no real external calls — by sandbox design); accountLabel edits are not reflected in historical app cards; theme ramps reuse light ramps in dark mode (verified readable, honey/moss badges are the softest).
+
+---
+Task ID: 18
+Agent: main (Z.ai Code)
+Task: User request — "now zip whole project to download". Package the entire Acme Chat project into a downloadable zip archive.
+
+Work Log:
+- Read worklog.md (rounds 0–17 complete; last round shipped Connectors + 12 accent themes) and surveyed the full project tree.
+- Measured payload: 1.9 GB total, dominated by regenerable artifacts — node_modules 1.2 GB, .next 618 MB, skills 61 MB (env tooling, gitignored), tool-results 2.4 MB (session junk), dev.log 16 KB.
+- Created archive: `zip -r` from /home/z excluding node_modules (all, incl. mini-services), .next, skills, tool-results, download/ (output dir), dev.log — then appended .git (7.1 MB full 18-round history) in a second pass.
+- INCLUDED: src/ (2.2 MB), prisma/ (schema + 4 seed scripts), db/custom.db (pre-seeded SQLite — project runnable immediately after bun install), mini-services sources + lockfiles, examples/, public/, scripts/, tests/, uploads/, agent-ctx/, .env, bun.lock, all configs (tsconfig, next.config, tailwind, postcss, eslint, components.json, Caddyfile), .gitignore, worklog.md.
+- Verified: `unzip -t` integrity OK; 1,521 files; top-level manifest checked entry-by-entry; final size 4.5 MB.
+- Wrote /home/z/my-project/download/SETUP.md — extraction guide: prerequisites (Bun 1.2+), 3-step setup (fix DATABASE_URL to relative `file:../db/custom.db`, bun install, bun run dev), optional mini-services startup, login credentials (sarah@acme.test / demo1234 owner; priya member), feature tour map.
+
+Stage Summary:
+- DELIVERABLE: /home/z/my-project/download/acme-chat-project.zip (4.5 MB, 1,521 files, integrity-verified) + SETUP.md quickstart alongside it.
+- Source-complete, dependency-free archive: everything needed to run is inside (pre-seeded DB, uploads, git history); only `bun install` restores the 1.2 GB of deps.
+- KEY PORTABILITY NOTE for anyone extracting: .env in the archive still points DATABASE_URL at the sandbox absolute path — SETUP.md step 2 tells them to switch it to `file:../db/custom.db` (Prisma resolves relative to prisma/schema.prisma). package.json "dev" script is `next dev -p 3000 | tee dev.log` — works anywhere with bun/node; no sandbox-specific dependencies in app code.
+- Next-phase candidates unchanged from Round 17 (scheduler-driven connector events, emoji autocomplete, connector slash-commands, multi-channel event routing, admin connector overview, theme quick-switcher).
