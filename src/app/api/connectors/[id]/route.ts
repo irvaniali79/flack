@@ -21,6 +21,8 @@ const patchSchema = z.object({
   channelId: z.string().min(1).optional(),
   accountLabel: z.string().trim().min(3).max(120).optional(),
   eventIds: z.array(z.string()).max(20).optional(),
+  // autonomous scheduler switch — when false the app only posts test events
+  autoEvents: z.boolean().optional(),
 })
 
 async function loadConnection(id: string, orgId: string) {
@@ -103,6 +105,8 @@ export async function PATCH(request: Request, { params }: Params) {
       }
       update.eventSubs = JSON.stringify(subs)
     }
+
+    if (data.autoEvents !== undefined) update.autoEvents = data.autoEvents
 
     const updated = await db.connectorConnection.update({
       where: { id: connection.id },

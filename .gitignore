@@ -59,6 +59,9 @@ server.log
 # Root-level release archives (project zip deliverable lives at repo root)
 /*.zip
 
+# Static-served zip copies in public/ (download URL insurance — keep out of git)
+/public/*.zip
+
 # Session tool output junk
 /tool-results/
 

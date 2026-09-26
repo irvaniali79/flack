@@ -337,12 +337,33 @@ export function ChannelHeader() {
         <div className="flex min-w-0 items-center gap-2.5">
           <span className="flex -space-x-2">
             {others.slice(0, 3).map((user) => (
-              <UserAvatar key={user.id} user={user} size="sm" className="ring-2 ring-background" />
+              <button
+                key={user.id}
+                type="button"
+                aria-label={`View ${user.name}'s profile`}
+                title={`View ${user.name}'s profile`}
+                onClick={() => setProfileUserId(user.id)}
+                className="rounded-full transition-transform duration-150 hover:scale-110 focus-visible:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+              >
+                <UserAvatar user={user} size="sm" className="ring-2 ring-background" />
+              </button>
             ))}
           </span>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
-              <h1 className="truncate text-[15px] font-bold leading-tight">{dmTitle}</h1>
+              {dmOther ? (
+                <button
+                  type="button"
+                  aria-label={`View ${dmOther.name}'s profile`}
+                  title={`View ${dmOther.name}'s profile`}
+                  onClick={() => setProfileUserId(dmOther.id)}
+                  className="truncate rounded-sm text-left text-[15px] font-bold leading-tight hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                >
+                  {dmTitle}
+                </button>
+              ) : (
+                <h1 className="truncate text-[15px] font-bold leading-tight">{dmTitle}</h1>
+              )}
               {dmOther?.kind === 'agent' && (
                 <span className="flex items-center gap-0.5 rounded bg-amber-500/15 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">
                   AI

@@ -1,7 +1,7 @@
 'use client'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { AtSign, Clock, Mail, Pencil, Sparkles } from 'lucide-react'
+import { AtSign, Camera, Clock, ImagePlus, Loader2, Mail, Pencil, Sparkles, X } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { useChatStore } from '@/lib/store'
+import { uploadFile } from '@/lib/api'
 import { localTimeIn, localTimezoneLabel } from '@/lib/time'
 import { UserAvatar } from '../avatar'
 import { PresenceDot } from '../presence-dot'
@@ -47,6 +48,8 @@ const TIMEZONES = [
   'Australia/Sydney',
 ]
 
+const MAX_PHOTO_MB = 10
+
 export function ProfileDialog() {
   const profileUserId = useChatStore((s) => s.profileUserId)
   const setProfileUserId = useChatStore((s) => s.setProfileUserId)
@@ -67,6 +70,15 @@ export function ProfileDialog() {
   const [timezone, setTimezone] = useState('UTC')
   const [busy, setBusy] = useState(false)
 
+  // Photos: uploaded immediately (via /api/files) but only SAVED to the profile
+  // on "Save changes" — so cancel is a true undo.
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const [bannerUrl, setBannerUrl] = useState<string | null>(null)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [uploadingBanner, setUploadingBanner] = useState(false)
+  const avatarInputRef = useRef<HTMLInputElement>(null)
+  const bannerInputRef = useRef<HTMLInputElement>(null)
+
   useEffect(() => {
     setEditing(false)
     if (user) {
@@ -75,6 +87,8 @@ export function ProfileDialog() {
       setStatusEmoji(user.statusEmoji ?? '')
       setStatusText(user.statusText ?? '')
       setTimezone(user.id === me?.id ? (me?.timezone ?? 'UTC') : (user.timezone ?? 'UTC'))
+      setAvatarUrl(user.avatarUrl ?? null)
+      setBannerUrl(user.bannerUrl ?? null)
     }
   }, [profileUserId, user, me])
 
@@ -91,6 +105,8 @@ export function ProfileDialog() {
         statusEmoji: statusEmoji || null,
         statusText: statusText.trim() || null,
         timezone,
+        avatarUrl,
+        bannerUrl,
       })
       toast.success('Profile updated')
       setEditing(false)
@@ -101,28 +117,144 @@ export function ProfileDialog() {
     }
   }
 
+  /** Upload an image picked from disk; stores the returned URL in local state (saved on Save). */
+  const pickPhoto = async (file: File | undefined, kind: 'avatar' | 'banner') => {
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please choose an image file (PNG, JPG, GIF…)')
+      return
+    }
+    if (file.size > MAX_PHOTO_MB * 1024 * 1024) {
+      toast.error(`Image is larger than ${MAX_PHOTO_MB} MB`)
+      return
+    }
+    const setUploading = kind === 'avatar' ? setUploadingAvatar : setUploadingBanner
+    setUploading(true)
+    try {
+      const uploaded = await uploadFile(file)
+      if (kind === 'avatar') setAvatarUrl(uploaded.url)
+      else setBannerUrl(uploaded.url)
+      toast.success(kind === 'avatar' ? 'Photo added — Save to apply' : 'Cover photo added — Save to apply')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Upload failed')
+    } finally {
+      setUploading(false)
+    }
+  }
+
   const myTimezone = editing ? timezone : (isSelf ? me?.timezone : user.timezone) || 'UTC'
   const displayEmoji = editing ? statusEmoji : (user.statusEmoji ?? '')
   const displayText = editing ? statusText : (user.statusText ?? '')
   const userTz = user.timezone || 'UTC'
 
+  // What the dialog previews: local (unsaved) photo state while editing, the
+  // stored profile otherwise.
+  const previewUser = editing ? { ...user, avatarUrl, bannerUrl } : user
+  const bannerSrc = editing ? bannerUrl : user.bannerUrl
+
   return (
     <Dialog open={open} onOpenChange={(next) => !next && setProfileUserId(null)}>
-      <DialogContent className="overflow-hidden rounded-2xl p-0 sm:max-w-sm">
-        {/* banner */}
-        <div
-          className="h-20 w-full"
-          style={{
-            background: `linear-gradient(135deg, ${user.avatarColor}55 0%, transparent 60%), linear-gradient(225deg, #10b98144 0%, transparent 55%)`,
-          }}
-          aria-hidden
-        />
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-2xl p-0 sm:max-w-sm">
+        {/* banner / cover photo */}
+        {bannerSrc ? (
+          <div className="relative h-28 w-full bg-muted">
+            {/* runtime-uploaded image served by /api/files, not a build-time asset */}
+            <img src={bannerSrc} alt="" className="h-full w-full object-cover" />
+          </div>
+        ) : (
+          <div
+            className="h-28 w-full"
+            style={{
+              background: `linear-gradient(135deg, ${user.avatarColor}55 0%, transparent 60%), linear-gradient(225deg, #10b98144 0%, transparent 55%)`,
+            }}
+            aria-hidden
+          />
+        )}
+        {isSelf && editing && (
+          <div className="absolute inset-x-0 top-0 flex h-28 items-center justify-end gap-1.5 bg-gradient-to-l from-black/45 via-black/20 to-transparent p-2">
+            <input
+              ref={bannerInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(event) => {
+                void pickPhoto(event.target.files?.[0], 'banner')
+                event.target.value = ''
+              }}
+            />
+            <Button
+              type="button"
+              size="sm"
+              disabled={uploadingBanner}
+              className="h-7 gap-1.5 rounded-md bg-black/55 px-2.5 text-xs font-semibold text-white shadow-sm backdrop-blur-sm hover:bg-black/75"
+              onClick={() => bannerInputRef.current?.click()}
+            >
+              {uploadingBanner ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+              ) : (
+                <ImagePlus className="h-3.5 w-3.5" aria-hidden />
+              )}
+              {bannerUrl ? 'Change cover' : 'Add cover'}
+            </Button>
+            {bannerUrl && (
+              <Button
+                type="button"
+                size="sm"
+                aria-label="Remove cover photo"
+                disabled={uploadingBanner}
+                className="h-7 w-7 rounded-md bg-black/55 p-0 text-white shadow-sm backdrop-blur-sm hover:bg-rose-600"
+                onClick={() => setBannerUrl(null)}
+              >
+                <X className="h-3.5 w-3.5" aria-hidden />
+              </Button>
+            )}
+          </div>
+        )}
         <div className="px-5 pb-5">
           <div className="-mt-10 mb-3 flex items-end justify-between">
             <div className="relative">
-              <UserAvatar user={user} size="xxl" className="ring-4 ring-background" />
-              {user.kind === 'human' && (
-                <PresenceDot online={presence[user.id]} className="absolute bottom-1 right-1 h-4 w-4" />
+              <UserAvatar user={previewUser} size="xxl" className="ring-4 ring-background" />
+              {isSelf && editing ? (
+                <>
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(event) => {
+                      void pickPhoto(event.target.files?.[0], 'avatar')
+                      event.target.value = ''
+                    }}
+                  />
+                  <button
+                    type="button"
+                    aria-label={avatarUrl ? 'Change profile photo' : 'Upload profile photo'}
+                    disabled={uploadingAvatar}
+                    onClick={() => avatarInputRef.current?.click()}
+                    className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-background bg-emerald-600 text-white shadow-md transition-colors duration-150 hover:bg-emerald-500 disabled:opacity-70"
+                  >
+                    {uploadingAvatar ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    ) : (
+                      <Camera className="h-4 w-4" aria-hidden />
+                    )}
+                  </button>
+                  {avatarUrl && (
+                    <button
+                      type="button"
+                      aria-label="Remove profile photo"
+                      disabled={uploadingAvatar}
+                      onClick={() => setAvatarUrl(null)}
+                      className="absolute -top-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border-2 border-background bg-zinc-800 text-white shadow-md transition-colors duration-150 hover:bg-rose-600"
+                    >
+                      <X className="h-3 w-3" aria-hidden />
+                    </button>
+                  )}
+                </>
+              ) : (
+                user.kind === 'human' && (
+                  <PresenceDot online={presence[user.id]} className="absolute bottom-1 right-1 h-4 w-4" />
+                )
               )}
             </div>
             {isSelf && !editing && (

@@ -12,6 +12,7 @@ import {
   Loader2,
   Lock,
   PlugZap,
+  Radio,
   Settings2,
   Unplug,
 } from 'lucide-react'
@@ -60,8 +61,10 @@ export function ConnectionCard({
   const [expanded, setExpanded] = useState(false)
   const [subs, setSubs] = useState<Record<string, boolean>>(connection.eventSubs)
   const [channelId, setChannelId] = useState(connection.channel.id)
+  const [autoEvents, setAutoEvents] = useState(connection.autoEvents)
   const [busyEvent, setBusyEvent] = useState(false)
   const [busyToggle, setBusyToggle] = useState<string | null>(null)
+  const [busyAuto, setBusyAuto] = useState(false)
   const [busyChannel, setBusyChannel] = useState(false)
   const [confirmDisconnect, setConfirmDisconnect] = useState(false)
   const [busyDisconnect, setBusyDisconnect] = useState(false)
@@ -70,7 +73,8 @@ export function ConnectionCard({
   useEffect(() => {
     setSubs(connection.eventSubs)
     setChannelId(connection.channel.id)
-  }, [connection.id, connection.eventSubs, connection.channel.id])
+    setAutoEvents(connection.autoEvents)
+  }, [connection.id, connection.eventSubs, connection.channel.id, connection.autoEvents])
 
   const onCount = def.events.filter((e) => subs[e.id]).length
   const channelName = channels.find((c) => c.id === channelId)?.name ?? connection.channel.name
@@ -139,6 +143,30 @@ export function ConnectionCard({
     }
   }
 
+  const toggleAutoEvents = async (next: boolean) => {
+    if (busyAuto) return
+    const prev = autoEvents
+    setAutoEvents(next)
+    setBusyAuto(true)
+    try {
+      await api(`/api/connectors/${connection.id}`, {
+        method: 'PATCH',
+        body: { autoEvents: next },
+      })
+      toast.success(
+        next
+          ? `${def.name} is live — subscribed events post automatically`
+          : `${def.name} paused — only test events will post`,
+      )
+      onChanged()
+    } catch (err) {
+      setAutoEvents(prev)
+      toast.error(err instanceof Error ? err.message : 'Could not update live events')
+    } finally {
+      setBusyAuto(false)
+    }
+  }
+
   const disconnect = async () => {
     if (busyDisconnect) return
     setBusyDisconnect(true)
@@ -166,6 +194,25 @@ export function ConnectionCard({
             <code className="max-w-full shrink-0 truncate rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground" title={connection.accountLabel}>
               {connection.accountLabel}
             </code>
+            {autoEvents ? (
+              <span
+                className="flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-400"
+                title="Subscribed events post automatically, like a real integration"
+              >
+                <span className="relative flex h-1.5 w-1.5" aria-hidden>
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60" />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                </span>
+                Live
+              </span>
+            ) : (
+              <span
+                className="shrink-0 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-400"
+                title="Autonomous events paused — test events still work"
+              >
+                Paused
+              </span>
+            )}
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
             <button
@@ -186,6 +233,12 @@ export function ConnectionCard({
               {connection.connectedBy ? `connected by ${connection.connectedBy}` : 'connected'}{' '}
               · {formatRelativeTime(connection.createdAt)}
             </span>
+            {connection.lastEventAt && (
+              <span className="inline-flex items-center gap-1">
+                <Radio className="h-3 w-3 shrink-0" aria-hidden />
+                last event {formatRelativeTime(connection.lastEventAt)}
+              </span>
+            )}
             <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 font-semibold text-emerald-700 dark:text-emerald-400">
               {onCount} event{onCount === 1 ? '' : 's'} subscribed
             </span>
@@ -229,6 +282,24 @@ export function ConnectionCard({
       {/* manage panel */}
       {canManage && expanded && (
         <div className="space-y-4 border-t border-border px-4 py-4">
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-muted/30 px-3 py-2.5">
+            <div className="min-w-0">
+              <p className="flex items-center gap-1.5 text-xs font-semibold">
+                <Radio className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden />
+                Live events
+              </p>
+              <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                {def.name} posts subscribed events into #{channelName} automatically as they happen.
+              </p>
+            </div>
+            <Switch
+              checked={autoEvents}
+              onCheckedChange={(checked) => void toggleAutoEvents(checked)}
+              disabled={busyAuto}
+              aria-label={`Live events for ${def.name}`}
+            />
+          </div>
+
           <div>
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
               Post to channel

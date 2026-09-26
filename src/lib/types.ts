@@ -7,6 +7,10 @@ export interface UserDTO {
   email?: string
   title: string | null
   avatarColor: string
+  /** Profile photo (/api/files/:id) — rendered instead of the color initials when set */
+  avatarUrl?: string | null
+  /** Profile background/cover photo shown in the profile dialog banner */
+  bannerUrl?: string | null
   kind: 'human' | 'agent' | 'app'
   role: 'owner' | 'admin' | 'member'
   statusEmoji: string | null
@@ -27,7 +31,7 @@ export interface UserDTO {
 
 export interface ReactionDTO {
   emoji: string
-  users: { id: string; name: string }[]
+  users: { id: string; name: string; kind: UserDTO['kind'] }[]
   count: number
 }
 
@@ -287,5 +291,9 @@ export interface ConnectorConnectionDTO {
   appUser: { id: string; name: string; avatarColor: string }
   connectedBy: string | null
   status: string
+  /** autonomous scheduler switch (live event stream) */
+  autoEvents: boolean
+  /** ISO timestamp of the last event posted through this connection */
+  lastEventAt: string | null
   createdAt: string
 }

@@ -202,8 +202,14 @@ interface ChatState {
   ) => Promise<void>
   setNotifyPrefs: (channelId: string, patch: { notifyLevel?: ChannelDTO['notifyLevel']; muted?: boolean }) => Promise<void>
   markChannelRead: (channelId: string, messageId: string | null) => void
+  /** Slack-style "Mark unread" — the newest message lights the row up again */
+  markChannelUnread: (channelId: string) => Promise<void>
+  /** "Mark as read" without opening the channel (context menu) */
+  markChannelAllRead: (channelId: string) => Promise<void>
+  /** "Mark unread from here" on a specific message (message context menu) */
+  markChannelUnreadFromMessage: (channelId: string, messageId: string) => Promise<void>
   setDraft: (channelId: string, text: string) => void
-  updateMe: (patch: Partial<Pick<UserDTO, 'name' | 'title' | 'statusEmoji' | 'statusText' | 'dndEnabled' | 'dndStart' | 'dndEnd' | 'timezone' | 'emailNotif'>>) => Promise<void>
+  updateMe: (patch: Partial<Pick<UserDTO, 'name' | 'title' | 'statusEmoji' | 'statusText' | 'avatarUrl' | 'bannerUrl' | 'dndEnabled' | 'dndStart' | 'dndEnd' | 'timezone' | 'emailNotif'>>) => Promise<void>
   /** Re-fetch the current user (e.g. after 2FA changes made via other endpoints). */
   refreshMe: () => Promise<void>
   /** Optimistically switch the accent color theme and persist it on the profile. */
@@ -224,6 +230,8 @@ interface ChatState {
   handleTyping: (channelId: string, userId: string, name: string, kind?: string, stop?: boolean) => void
   handleNotification: (notification: NotificationDTO) => void
   handleChannelsRefresh: () => Promise<void>
+  /** Another user (or this client, echoed back) updated their profile — swap in the fresh DTO everywhere. */
+  handleUserUpdated: (user: UserDTO) => void
 
   // ── ui setters ────────────────────────────────────────────────────────────
   setSearchOpen: (open: boolean, seed?: string) => void
@@ -722,6 +730,58 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
+  markChannelUnread: async (channelId) => {
+    // optimistic: at least the newest message reads unread (server recomputes
+    // the exact count on the next channels fetch)
+    set((s) => ({
+      channels: s.channels.map((c) =>
+        c.id === channelId ? { ...c, unread: Math.max(1, c.unread) } : c,
+      ),
+    }))
+    try {
+      await api(`/api/channels/${channelId}/read`, {
+        method: 'POST',
+        body: { mode: 'unread' },
+      })
+      await get().fetchChannels()
+    } catch {
+      await get().fetchChannels()
+    }
+  },
+
+  markChannelAllRead: async (channelId) => {
+    set((s) => ({
+      channels: s.channels.map((c) =>
+        c.id === channelId ? { ...c, unread: 0, mentionCount: 0 } : c,
+      ),
+    }))
+    try {
+      await api(`/api/channels/${channelId}/read`, {
+        method: 'POST',
+        body: { mode: 'read' },
+      })
+    } catch {
+      // optimistic state is already applied; next fetch reconciles
+    }
+  },
+
+  markChannelUnreadFromMessage: async (channelId, messageId) => {
+    set((s) => ({
+      channels: s.channels.map((c) =>
+        c.id === channelId ? { ...c, unread: Math.max(1, c.unread) } : c,
+      ),
+    }))
+    try {
+      await api(`/api/channels/${channelId}/read`, {
+        method: 'POST',
+        body: { mode: 'unread-from', messageId },
+      })
+      await get().fetchChannels()
+    } catch {
+      await get().fetchChannels()
+    }
+  },
+
   setDraft: (channelId, text) => {
     set((s) => {
       const drafts = { ...s.drafts, [channelId]: text }
@@ -1031,6 +1091,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   handleChannelsRefresh: async () => {
     await get().fetchChannels()
+  },
+
+  handleUserUpdated: (user) => {
+    set((s) => {
+      const isMe = s.me?.id === user.id
+      if (isMe) applyAccentTheme(user.accentTheme)
+      return {
+        users: s.users.some((u) => u.id === user.id)
+          ? s.users.map((u) => (u.id === user.id ? user : u))
+          : [...s.users, user],
+        me: isMe ? { ...s.me, ...user } : s.me,
+      }
+    })
   },
 
   // ── ui setters ─────────────────────────────────────────────────────────────

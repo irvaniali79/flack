@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import {
   Bookmark,
   BookmarkCheck,
+  CircleDot,
   Copy,
   CornerDownRight,
   Download,
@@ -37,6 +38,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
   Tooltip,
@@ -47,7 +58,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useChatStore } from '@/lib/store'
 import type { ConnectorMessagePayload, MessageDTO } from '@/lib/types'
-import { formatBytes } from '@/lib/api'
+import { api, formatBytes } from '@/lib/api'
 import { formatTime, formatTimeHover } from '@/lib/time'
 import { MarkdownBody } from '@/lib/markdown'
 import { useCustomEmojiStore, isCustomEmojiToken, customEmojiName } from '@/lib/custom-emoji'
@@ -57,16 +68,41 @@ import { EmojiPicker } from './emoji-picker'
 import { AppBadge, CONNECTOR_BRAND, ConnectorTile, brandTextColor } from './connectors/connector-icon'
 
 const QUICK_REACTIONS = ['👍', '🎉', '👀', '❤️']
+const MENU_REACTIONS = ['👍', '🎉', '👀', '❤️', '😄', '🚀', '🙌', '✅']
 
 /** Rich app-card body for connector messages — the payload replaces the
- *  plain-text body visually (the text itself stays for search + previews). */
+ *  plain-text body visually (the text itself stays for search + previews).
+ *  Action buttons are REAL: each click posts an outcome message from the
+ *  app into the channel and the app ticks ✅ on the card. */
 function ConnectorAppCard({
   payload,
   color,
+  messageId,
+  completed,
 }: {
   payload: ConnectorMessagePayload
   color: string
+  messageId: string
+  completed: boolean
 }) {
+  const [busy, setBusy] = useState<string | null>(null)
+
+  const runAction = async (label: string) => {
+    if (completed || busy) return
+    setBusy(label)
+    try {
+      const data = await api<{ channelName: string; title: string }>('/api/connectors/actions', {
+        method: 'POST',
+        body: { messageId, action: label },
+      })
+      toast.success(`${label} — done`, { description: `${data.title} · posted to #${data.channelName}` })
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Action failed')
+    } finally {
+      setBusy(null)
+    }
+  }
+
   return (
     <div
       className="mt-1 max-w-xl rounded-xl border border-border/80 p-3"
@@ -88,28 +124,49 @@ function ConnectorAppCard({
       )}
       {payload.actions.length > 0 && (
         <div className="mt-2.5 flex flex-wrap gap-1.5">
-          {payload.actions.map((action) =>
-            action.style === 'primary' ? (
+          {payload.actions.map((action) => {
+            const done = completed || busy === action.label
+            return action.style === 'primary' ? (
               <button
                 key={action.label}
                 type="button"
-                onClick={() => toast.info('Demo action — connectors are simulated in this sandbox')}
-                className="rounded-lg px-3 py-1 text-xs font-semibold shadow-sm transition-transform duration-100 hover:scale-[1.03] active:scale-95"
-                style={{ backgroundColor: color, color: brandTextColor(color) }}
+                onClick={() => void runAction(action.label)}
+                disabled={completed || !!busy}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-lg px-3 py-1 text-xs font-semibold shadow-sm transition-all duration-100',
+                  done
+                    ? 'cursor-default opacity-80'
+                    : 'hover:scale-[1.03] active:scale-95',
+                )}
+                style={
+                  done
+                    ? { backgroundColor: `${color}22`, color }
+                    : { backgroundColor: color, color: brandTextColor(color) }
+                }
               >
-                {action.label}
+                {busy === action.label && <Loader2 className="h-3 w-3 animate-spin" aria-hidden />}
+                {done && busy !== action.label && <span aria-hidden>✓</span>}
+                {done && busy !== action.label ? 'Done' : action.label}
               </button>
             ) : (
               <button
                 key={action.label}
                 type="button"
-                onClick={() => toast.info('Demo action — connectors are simulated in this sandbox')}
-                className="rounded-lg border border-border bg-background px-3 py-1 text-xs font-semibold text-foreground/85 transition-colors duration-100 hover:bg-accent"
+                onClick={() => void runAction(action.label)}
+                disabled={completed || !!busy}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1 text-xs font-semibold transition-colors duration-100',
+                  done
+                    ? 'cursor-default text-emerald-600 opacity-80 dark:text-emerald-400'
+                    : 'text-foreground/85 hover:bg-accent',
+                )}
               >
-                {action.label}
+                {busy === action.label && <Loader2 className="h-3 w-3 animate-spin" aria-hidden />}
+                {done && busy !== action.label && <span aria-hidden>✓</span>}
+                {done && busy !== action.label ? 'Done' : action.label}
               </button>
-            ),
-          )}
+            )
+          })}
         </div>
       )}
       {payload.footer && (
@@ -145,6 +202,7 @@ export const MessageItem = memo(function MessageItem({
   const isSaved = useChatStore((s) => s.savedMessageIds.includes(message.id))
   const toggleSavedMessage = useChatStore((s) => s.toggleSavedMessage)
   const setForwardingMessageId = useChatStore((s) => s.setForwardingMessageId)
+  const markChannelUnreadFromMessage = useChatStore((s) => s.markChannelUnreadFromMessage)
   const customEmoji = useCustomEmojiStore((s) => s.byName)
 
   // Renders a reaction emoji — a unicode char, or a workspace custom emoji
@@ -191,6 +249,13 @@ export const MessageItem = memo(function MessageItem({
   const deleted = !!message.deletedAt
   const canEdit = isMine && !deleted
   const canDelete = (isMine || isAdmin) && !deleted
+  // A connector card counts as completed once the app itself reacted ✅ on it
+  // (the actions API does exactly that on every successful action) — survives
+  // reloads and propagates to every client in realtime via reaction:updated.
+  const actionCompleted =
+    !!appPayload &&
+    appPayload.actions.length > 0 &&
+    message.reactions.some((r) => r.emoji === '✅' && r.users.some((u) => u.kind === 'app'))
 
   const react = async (emoji: string) => {
     if (reacting) return
@@ -229,6 +294,13 @@ export const MessageItem = memo(function MessageItem({
     toast.success(isSaved ? 'Removed from saved items' : 'Saved for later')
   }
 
+  const markUnread = () => {
+    void markChannelUnreadFromMessage(message.channelId, message.id)
+    toast.success('Marked unread from here', {
+      description: 'The channel reappears with an unread badge in your sidebar.',
+    })
+  }
+
   if (deleted) {
     return (
       <div
@@ -244,25 +316,27 @@ export const MessageItem = memo(function MessageItem({
   }
 
   return (
-    <motion.div
-      id={`message-${message.id}`}
-      initial={entrance ? { opacity: 0, y: 8 } : false}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.15, ease: 'easeOut' }}
-      onMouseEnter={() => setToolbarVisible(true)}
-      onMouseLeave={() => setToolbarVisible(false)}
-      onFocusCapture={() => setToolbarVisible(true)}
-      onBlurCapture={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setToolbarVisible(false)
-      }}
-      className={cn(
-        'group relative flex gap-2.5 px-4 py-1 transition-colors duration-150 hover:bg-muted/40 md:px-6',
-        compact ? 'py-0.5' : 'mt-1.5 py-1',
-        mentionsMe &&
-          'border-l-[3px] border-amber-400/80 bg-amber-500/5 hover:bg-amber-500/10 dark:border-amber-500/70',
-        highlight && 'flash-highlight',
-      )}
-    >
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <motion.div
+          id={`message-${message.id}`}
+          initial={entrance ? { opacity: 0, y: 8 } : false}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.15, ease: 'easeOut' }}
+          onMouseEnter={() => setToolbarVisible(true)}
+          onMouseLeave={() => setToolbarVisible(false)}
+          onFocusCapture={() => setToolbarVisible(true)}
+          onBlurCapture={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setToolbarVisible(false)
+          }}
+          className={cn(
+            'group relative flex gap-2.5 rounded-lg px-4 py-1 transition-colors duration-150 hover:bg-muted/40 md:px-6',
+            compact ? 'py-0.5' : 'mt-1.5 py-1',
+            mentionsMe &&
+              'rounded-l-none border-l-[3px] border-amber-400/80 bg-amber-500/5 hover:bg-amber-500/10 dark:border-amber-500/70',
+            highlight && 'flash-highlight',
+          )}
+        >
       {/* avatar / gutter */}
       <div className="w-9 shrink-0 pt-0.5">
         {compact ? (
@@ -274,7 +348,7 @@ export const MessageItem = memo(function MessageItem({
             type="button"
             aria-label={`View ${sender.name}'s profile`}
             onClick={() => setProfileUserId(sender.id)}
-            className="transition-transform duration-150 hover:scale-105"
+            className="flex rounded-full transition-transform duration-150 hover:scale-105 focus-visible:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
           >
             {connector ? (
               <ConnectorTile icon={connector.icon} color={connector.color} size="md" />
@@ -296,7 +370,7 @@ export const MessageItem = memo(function MessageItem({
             <button
               type="button"
               onClick={() => sender && setProfileUserId(sender.id)}
-              className="text-[14px] font-bold leading-6 hover:underline"
+              className="rounded-md px-0.5 text-[14px] font-bold leading-6 hover:underline"
             >
               {sender?.name ?? 'Unknown'}
             </button>
@@ -354,7 +428,12 @@ export const MessageItem = memo(function MessageItem({
         )}
 
         {connector && appPayload ? (
-          <ConnectorAppCard payload={appPayload} color={connector.color} />
+          <ConnectorAppCard
+            payload={appPayload}
+            color={connector.color}
+            messageId={message.id}
+            completed={actionCompleted}
+          />
         ) : (
           <MarkdownBody
             body={message.body}
@@ -630,6 +709,84 @@ export const MessageItem = memo(function MessageItem({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </motion.div>
+        </motion.div>
+      </ContextMenuTrigger>
+
+      {/* Slack-style right-click menu — mirrors the hover toolbar actions */}
+      <ContextMenuContent className="w-56 rounded-xl">
+        <ContextMenuSub>
+          <ContextMenuSubTrigger className="gap-2">
+            <Smile className="h-4 w-4" aria-hidden /> Add reaction
+          </ContextMenuSubTrigger>
+          <ContextMenuSubContent className="w-auto rounded-xl p-1">
+            <div className="grid grid-cols-4 gap-0.5">
+              {MENU_REACTIONS.map((emoji) => (
+                <ContextMenuItem
+                  key={emoji}
+                  onClick={() => void react(emoji)}
+                  className="h-8 w-8 justify-center rounded-md p-0 text-base"
+                >
+                  {emoji}
+                </ContextMenuItem>
+              ))}
+            </div>
+          </ContextMenuSubContent>
+        </ContextMenuSub>
+        {!inThread && (
+          <ContextMenuItem className="gap-2" onClick={() => void openThread(message.id)}>
+            <MessageCircle className="h-4 w-4" aria-hidden /> Reply in thread
+          </ContextMenuItem>
+        )}
+        <ContextMenuItem className="gap-2" onClick={markUnread}>
+          <CircleDot className="h-4 w-4" aria-hidden /> Mark unread
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem
+          className="gap-2"
+          onClick={() => void togglePin(message.id, !message.isPinned)}
+        >
+          {message.isPinned ? <PinOff className="h-4 w-4" aria-hidden /> : <Pin className="h-4 w-4" aria-hidden />}
+          {message.isPinned ? 'Unpin message' : 'Pin message'}
+        </ContextMenuItem>
+        <ContextMenuItem
+          className={cn(
+            'gap-2',
+            isSaved && 'text-emerald-600 focus:text-emerald-600 dark:text-emerald-400 dark:focus:text-emerald-400',
+          )}
+          onClick={toggleSave}
+        >
+          {isSaved ? <BookmarkCheck className="h-4 w-4" aria-hidden /> : <Bookmark className="h-4 w-4" aria-hidden />}
+          {isSaved ? 'Unsave message' : 'Save message'}
+        </ContextMenuItem>
+        <ContextMenuItem className="gap-2" onClick={() => void copyText()}>
+          <Copy className="h-4 w-4" aria-hidden /> Copy text
+        </ContextMenuItem>
+        <ContextMenuItem className="gap-2" onClick={() => void copyLink()}>
+          <LinkIcon className="h-4 w-4" aria-hidden /> Copy link
+        </ContextMenuItem>
+        <ContextMenuItem className="gap-2" onClick={() => setForwardingMessageId(message.id)}>
+          <Send className="h-4 w-4" aria-hidden /> Share message
+        </ContextMenuItem>
+        {canEdit && (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuItem className="gap-2" onClick={() => setEditingMessageId(message.id)}>
+              <Pencil className="h-4 w-4" aria-hidden /> Edit message
+            </ContextMenuItem>
+          </>
+        )}
+        {canDelete && (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              className="gap-2 text-rose-600 focus:text-rose-600 dark:focus:text-rose-400"
+              onClick={() => setConfirmDelete(true)}
+            >
+              <Trash2 className="h-4 w-4" aria-hidden /> Delete message
+            </ContextMenuItem>
+          </>
+        )}
+      </ContextMenuContent>
+    </ContextMenu>
   )
 })

@@ -950,6 +950,10 @@ export async function postConnectorEvent(
     message as unknown as Parameters<typeof serializeMessage>[0],
   )
   void emitToChannel(connection.channelId, 'message:new', { message: dto }).catch(() => {})
+  // telemetry for the connection card ("last event 4m ago") — fire and forget
+  db.connectorConnection
+    .update({ where: { id: connection.id }, data: { lastEventAt: new Date() } })
+    .catch(() => {})
   return { message: dto, channelName: def?.name ?? connection.connectorId }
 }
 

@@ -242,7 +242,7 @@ export function ConnectDialog({
             </ul>
             <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
               <Radio className="h-3 w-3 shrink-0" aria-hidden />
-              Scope labels are simulated for this sandbox — nothing leaves the workspace.
+              Demo OAuth — scopes are granted locally and events stream inside this workspace only.
             </p>
           </div>
         )}

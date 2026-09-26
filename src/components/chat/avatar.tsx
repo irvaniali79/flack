@@ -1,4 +1,5 @@
 'use client'
+import { useState } from 'react'
 import { Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { UserDTO } from '@/lib/types'
@@ -28,23 +29,38 @@ export function UserAvatar({
   online = false,
   className,
 }: {
-  user: Pick<UserDTO, 'name' | 'avatarColor' | 'kind'>
+  user: Pick<UserDTO, 'name' | 'avatarColor' | 'kind'> & { avatarUrl?: string | null }
   size?: AvatarSize
   presence?: boolean
   online?: boolean
   className?: string
 }) {
+  // If the photo fails to load (deleted file, stale URL), fall back to initials.
+  const [photoBroken, setPhotoBroken] = useState(false)
+  const showPhoto = !!user.avatarUrl && !photoBroken
+
   return (
     <span className={cn('relative inline-flex shrink-0', className)}>
       <span
         className={cn(
-          'inline-flex items-center justify-center font-semibold text-white select-none',
+          'inline-flex items-center justify-center overflow-hidden font-semibold text-white select-none',
           SIZES[size],
         )}
-        style={{ backgroundColor: user.avatarColor }}
+        style={showPhoto ? undefined : { backgroundColor: user.avatarColor }}
         aria-hidden
       >
-        {initials(user.name)}
+        {showPhoto ? (
+          // runtime-uploaded image served by /api/files, not a build-time asset
+          <img
+            src={user.avatarUrl as string}
+            alt=""
+            className="h-full w-full object-cover"
+            draggable={false}
+            onError={() => setPhotoBroken(true)}
+          />
+        ) : (
+          initials(user.name)
+        )}
       </span>
       {user.kind === 'agent' && (
         <span

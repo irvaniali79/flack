@@ -9,10 +9,13 @@ import {
   Bot,
   CheckCheck,
   ChevronDown,
+  CircleDot,
   Clock,
   Compass,
+  DoorOpen,
   Hash,
   Keyboard,
+  Link2,
   Lock,
   LogOut,
   MessagesSquare,
@@ -25,11 +28,32 @@ import {
   Settings,
   Shield,
   Sparkles,
+  SquarePen,
   Sun,
+  UserRound,
+  Volume2,
+  VolumeX,
   Zap,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { toast } from 'sonner'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -52,6 +76,7 @@ import { formatRelativeTime, formatTime } from '@/lib/time'
 import type { NotificationDTO } from '@/lib/types'
 import { isQuietHours, quietUntilLabel } from '@/lib/dnd'
 import { AtSign, CornerDownRight } from 'lucide-react'
+import { RenameChannelDialog } from './dialogs/rename-channel'
 
 // ─── notification bell ───────────────────────────────────────────────────────
 
@@ -382,12 +407,21 @@ function NotificationBell() {
 
 // ─── channel row ─────────────────────────────────────────────────────────────
 
-function UnreadBadge({ count, mentions }: { count: number; mentions: number }) {
+function UnreadBadge({ count, mentions, muted = false }: { count: number; mentions: number; muted?: boolean }) {
   if (count <= 0) return null
-  if (mentions > 0) {
+  if (mentions > 0 && !muted) {
     return (
       <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 text-[11px] font-bold text-white">
         {mentions > 9 ? '9+' : mentions}
+      </span>
+    )
+  }
+  // muted channels render a hollow badge (Slack behaviour — still countable,
+  // but visually de-emphasised)
+  if (muted) {
+    return (
+      <span className="flex h-5 min-w-5 items-center justify-center rounded-full border border-border bg-transparent px-1.5 text-[11px] font-bold text-muted-foreground">
+        {mentions > 0 ? (mentions > 9 ? '9+' : mentions) : count > 99 ? '99+' : count}
       </span>
     )
   }
@@ -398,16 +432,25 @@ function UnreadBadge({ count, mentions }: { count: number; mentions: number }) {
   )
 }
 
-function ChannelRow({ channel }: { channel: ChannelDTO }) {
+// ─── channel row with Slack-style right-click menu ──────────────────────────
+
+function ChannelRow({ channel, onRename }: { channel: ChannelDTO; onRename?: (c: ChannelDTO) => void }) {
   const activeChannelId = useChatStore((s) => s.activeChannelId)
   const openChannel = useChatStore((s) => s.openChannel)
   const presence = useChatStore((s) => s.presence)
-  const users = useChatStore((s) => s.users)
+  const me = useChatStore((s) => s.me)
+  const setProfileUserId = useChatStore((s) => s.setProfileUserId)
+  const setNotifyPrefs = useChatStore((s) => s.setNotifyPrefs)
+  const leaveChannel = useChatStore((s) => s.leaveChannel)
+  const markChannelUnread = useChatStore((s) => s.markChannelUnread)
+  const markChannelAllRead = useChatStore((s) => s.markChannelAllRead)
+  const [confirmLeave, setConfirmLeave] = useState(false)
   const active = activeChannelId === channel.id
   const isDm = channel.kind === 'dm' || channel.kind === 'group_dm'
 
   const other = isDm && channel.members?.length ? channel.members[0] : null
   const online = other ? presence[other.id] : false
+  const isAdmin = me?.role === 'owner' || me?.role === 'admin'
 
   const label = isDm
     ? channel.kind === 'dm'
@@ -415,54 +458,160 @@ function ChannelRow({ channel }: { channel: ChannelDTO }) {
       : `${(channel.members ?? []).map((m) => m.name.split(' ')[0]).join(', ')}`
     : channel.name
 
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/?channel=${channel.id}`)
+      toast.success(isDm ? 'Conversation link copied' : `Link to #${channel.name} copied`)
+    } catch {
+      toast.error('Copy failed')
+    }
+  }
+
+  const toggleMute = () => {
+    const next = !channel.muted
+    void setNotifyPrefs(channel.id, { muted: next })
+    toast.success(next ? `Muted ${isDm ? label : `#${channel.name}`}` : 'Notifications back on', {
+      description: next ? 'You won\u2019t be notified about new messages' : undefined,
+    })
+  }
+
   return (
-    <button
-      type="button"
-      id={`sidebar-item-${channel.id}`}
-      onClick={() => void openChannel(channel.id)}
-      className={cn(
-        'group relative flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-all duration-150 hover:translate-x-0.5',
-        active
-          ? 'bg-emerald-600/15 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
-          : 'text-foreground/75 hover:bg-accent-surface-hover hover:text-foreground',
-        channel.unread > 0 && !active && 'font-medium text-foreground',
-      )}
-    >
-      {/* active left bar */}
-      <span
-        className={cn(
-          'absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-emerald-500 transition-opacity duration-150',
-          active ? 'opacity-100' : 'opacity-0',
-        )}
-        aria-hidden
-      />
-      {isDm ? (
-        other ? (
-          <span className="relative shrink-0">
-            <UserAvatar user={other} size="xs" />
-            {other.kind === 'human' && <PresenceDot online={online} className="absolute -bottom-1 -right-1 h-2.5 w-2.5" />}
-          </span>
-        ) : (
-          <span className="w-6" aria-hidden />
-        )
-      ) : channel.kind === 'private' ? (
-        <Lock className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-      ) : (
-        <Hash className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-      )}
-      <span className="min-w-0 flex-1 truncate text-sm">{label}</span>
-      {other?.kind === 'agent' && (
-        <span className="flex shrink-0 items-center gap-0.5 rounded bg-amber-500/15 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">
-          <Sparkles className="h-2.5 w-2.5" aria-hidden /> AI
-        </span>
-      )}
-      {channel.isArchived && (
-        <span className="rounded bg-muted px-1 py-px text-[9px] font-semibold uppercase text-muted-foreground">
-          arch
-        </span>
-      )}
-      <UnreadBadge count={channel.unread} mentions={channel.mentionCount} />
-    </button>
+    <>
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <button
+            type="button"
+            id={`sidebar-item-${channel.id}`}
+            onClick={() => void openChannel(channel.id)}
+            className={cn(
+              'group relative flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-all duration-150 hover:translate-x-0.5',
+              active
+                ? 'bg-emerald-600/15 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
+                : 'text-foreground/75 hover:bg-accent-surface-hover hover:text-foreground',
+              channel.unread > 0 && !active && 'font-medium text-foreground',
+            )}
+          >
+            {/* active left bar */}
+            <span
+              className={cn(
+                'absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-emerald-500 transition-opacity duration-150',
+                active ? 'opacity-100' : 'opacity-0',
+              )}
+              aria-hidden
+            />
+            {isDm ? (
+              other ? (
+                <span className="relative shrink-0">
+                  <UserAvatar user={other} size="xs" />
+                  {other.kind === 'human' && <PresenceDot online={online} className="absolute -bottom-1 -right-1 h-2.5 w-2.5" />}
+                </span>
+              ) : (
+                <span className="w-6" aria-hidden />
+              )
+            ) : channel.kind === 'private' ? (
+              <Lock className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+            ) : (
+              <Hash className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+            )}
+            <span className="min-w-0 flex-1 truncate text-sm">{label}</span>
+            {other?.kind === 'agent' && (
+              <span className="flex shrink-0 items-center gap-0.5 rounded bg-amber-500/15 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                <Sparkles className="h-2.5 w-2.5" aria-hidden /> AI
+              </span>
+            )}
+            {channel.isArchived && (
+              <span className="rounded bg-muted px-1 py-px text-[9px] font-semibold uppercase text-muted-foreground">
+                arch
+              </span>
+            )}
+            {channel.muted && !channel.isArchived && other?.kind !== 'agent' && (
+              <VolumeX className="h-3 w-3 shrink-0 text-muted-foreground" aria-label="Muted" />
+            )}
+            <UnreadBadge count={channel.unread} mentions={channel.mentionCount} muted={channel.muted} />
+          </button>
+        </ContextMenuTrigger>
+
+        <ContextMenuContent className="w-56 rounded-xl">
+          {/* DM: open the teammate's profile */}
+          {isDm && other && (
+            <ContextMenuItem className="gap-2" onClick={() => setProfileUserId(other.id)}>
+              <UserRound className="h-4 w-4" aria-hidden /> View profile
+            </ContextMenuItem>
+          )}
+          {channel.unread > 0 ? (
+            <ContextMenuItem className="gap-2" onClick={() => void markChannelAllRead(channel.id)}>
+              <CheckCheck className="h-4 w-4" aria-hidden /> Mark as read
+            </ContextMenuItem>
+          ) : (
+            <ContextMenuItem className="gap-2" onClick={() => void markChannelUnread(channel.id)}>
+              <CircleDot className="h-4 w-4" aria-hidden /> Mark as unread
+            </ContextMenuItem>
+          )}
+          <ContextMenuItem className="gap-2" onClick={toggleMute}>
+            {channel.muted ? (
+              <>
+                <Volume2 className="h-4 w-4" aria-hidden /> Unmute {isDm ? 'conversation' : 'channel'}
+              </>
+            ) : (
+              <>
+                <VolumeX className="h-4 w-4" aria-hidden /> Mute {isDm ? 'conversation' : 'channel'}
+              </>
+            )}
+          </ContextMenuItem>
+          <ContextMenuItem className="gap-2" onClick={() => void copyLink()}>
+            <Link2 className="h-4 w-4" aria-hidden /> Copy link
+          </ContextMenuItem>
+          {/* channels only: rename (admins) + leave */}
+          {!isDm && onRename && isAdmin && !channel.isArchived && (
+            <>
+              <ContextMenuSeparator />
+              <ContextMenuItem className="gap-2" onClick={() => onRename(channel)}>
+                <SquarePen className="h-4 w-4" aria-hidden /> Rename channel
+              </ContextMenuItem>
+            </>
+          )}
+          {!isDm && !channel.isDefault && (
+            <>
+              {!(onRename && isAdmin && !channel.isArchived) && <ContextMenuSeparator />}
+              <ContextMenuItem
+                className="gap-2 text-rose-600 focus:text-rose-600 dark:focus:text-rose-400"
+                onClick={() => setConfirmLeave(true)}
+              >
+                <DoorOpen className="h-4 w-4" aria-hidden /> Leave channel
+              </ContextMenuItem>
+            </>
+          )}
+        </ContextMenuContent>
+      </ContextMenu>
+
+      {/* leave confirmation */}
+      <AlertDialog open={confirmLeave} onOpenChange={setConfirmLeave}>
+        <AlertDialogContent className="rounded-xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Leave #{channel.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You won't receive updates from #{channel.name} anymore. You can always rejoin later
+              from Browse channels.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-lg">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="rounded-lg bg-rose-600 text-white hover:bg-rose-500"
+              onClick={() => {
+                setConfirmLeave(false)
+                void leaveChannel(channel.id).then(
+                  () => toast.success(`Left #${channel.name}`),
+                  (err: Error) => toast.error(err.message),
+                )
+              }}
+            >
+              Leave
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }
 
@@ -572,6 +721,7 @@ export function Sidebar({
   const [channelsOpen, setChannelsOpen] = useState(true)
   const [dmsOpen, setDmsOpen] = useState(true)
   const [agentsDialogOpen, setAgentsDialogOpen] = useState(false)
+  const [renameChannel, setRenameChannel] = useState<ChannelDTO | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const memberChannels = useMemo(
@@ -804,7 +954,9 @@ export function Sidebar({
               {memberChannels.length === 0 ? (
                 <p className="px-2 py-1 text-xs text-muted-foreground">No channels yet</p>
               ) : (
-                memberChannels.map((channel) => <ChannelRow key={channel.id} channel={channel} />)
+                memberChannels.map((channel) => (
+                  <ChannelRow key={channel.id} channel={channel} onRename={setRenameChannel} />
+                ))
               )}
             </div>
           )}
@@ -847,7 +999,7 @@ export function Sidebar({
           {dmsOpen && (
             <div className="space-y-0.5">
               {dmChannels.map((channel) => (
-                <ChannelRow key={channel.id} channel={channel} />
+                <ChannelRow key={channel.id} channel={channel} onRename={setRenameChannel} />
               ))}
               {agentLaunchers.map((agent) => (
                 <AgentLauncherRow key={agent.id} agent={agent} onStart={(id) => void openAgentDm(id)} />
@@ -863,12 +1015,20 @@ export function Sidebar({
       {/* agent management dialog */}
       <AgentDialog open={agentsDialogOpen} onOpenChange={setAgentsDialogOpen} />
 
+      {/* rename-channel dialog (right-click menu) */}
+      <RenameChannelDialog
+        channel={renameChannel}
+        onOpenChange={(open) => {
+          if (!open) setRenameChannel(null)
+        }}
+      />
+
       {/* current user row */}
       {me && (
         <button
           type="button"
           onClick={() => setProfileUserId(me.id)}
-          className="flex items-center gap-2.5 border-t border-border px-3 py-3 transition-colors duration-150 hover:bg-accent-surface-hover"
+          className="flex items-center gap-2.5 border-t border-border px-3 py-3 transition-colors duration-150 hover:bg-accent-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500/60"
           aria-label="Open my profile"
         >
           <UserAvatar user={me} size="sm" presence online />

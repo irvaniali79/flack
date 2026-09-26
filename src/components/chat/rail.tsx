@@ -69,23 +69,8 @@ export function Rail() {
       {/* `dark` class — the rail renders the saturated dark chrome tokens in both modes;
           `text-foreground` pins inherited text to the scoped dark token set (see sidebar.tsx) */}
       <div className="dark flex h-full w-14 shrink-0 flex-col items-center gap-1 border-r border-border bg-accent-surface-2 py-3 text-foreground">
-        {/* org block */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              aria-label="Acme Inc workspace"
-              onClick={goHome}
-              className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-sm font-black text-white shadow-sm transition-transform duration-150 hover:scale-105"
-            >
-              A
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="right">Acme Inc</TooltipContent>
-        </Tooltip>
-
-        <div className="my-2 h-px w-8 bg-emerald-400/30 dark:bg-emerald-800/40" aria-hidden />
-
+        {/* NOTE: the workspace identity lives ONLY in the sidebar org header —
+            no duplicate block here (user-requested single Acme Inc identity). */}
         <Tooltip>
           <TooltipTrigger asChild>
             <button

@@ -5,7 +5,7 @@ import { io, type Socket } from 'socket.io-client'
 import { toast } from 'sonner'
 import { useChatStore } from './store'
 import { isQuietHours } from './dnd'
-import type { MessageDTO, NotificationDTO, ReactionDTO } from './types'
+import type { MessageDTO, NotificationDTO, ReactionDTO, UserDTO } from './types'
 
 let socket: Socket | null = null
 let identity: { userId: string; name: string } | null = null
@@ -168,6 +168,12 @@ export function initSocket(userId: string, name: string): void {
 
   socket.on('channels:refresh', () => {
     void store.getState().handleChannelsRefresh()
+  })
+
+  socket.on('user:updated', (payload: { user?: UserDTO }) => {
+    // A teammate (or this client, echoed back) changed their profile —
+    // swap the fresh DTO so avatars, names, statuses update live.
+    if (payload?.user) store.getState().handleUserUpdated(payload.user)
   })
 }
 

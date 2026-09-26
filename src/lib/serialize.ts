@@ -32,6 +32,8 @@ export function serializeUser(user: UserWithAgent): UserDTO {
     email: user.kind === 'human' ? user.email : undefined,
     title: user.title,
     avatarColor: user.avatarColor,
+    avatarUrl: user.avatarUrl,
+    bannerUrl: user.bannerUrl,
     kind: (user.kind === 'agent' ? 'agent' : user.kind === 'app' ? 'app' : 'human') as UserDTO['kind'],
     role: user.role as UserDTO['role'],
     statusEmoji: user.statusEmoji,
@@ -104,7 +106,11 @@ export function serializeMessage(message: MessageFull): MessageDTO {
       users: [],
       count: 0,
     }
-    entry.users.push({ id: reaction.user.id, name: reaction.user.name })
+    entry.users.push({
+      id: reaction.user.id,
+      name: reaction.user.name,
+      kind: reaction.user.kind as UserDTO['kind'],
+    })
     entry.count += 1
     byEmoji.set(reaction.emoji, entry)
   }
@@ -262,6 +268,8 @@ export function serializeConnection(connection: ConnectionFull): ConnectorConnec
     },
     connectedBy: connection.connectedBy?.name ?? null,
     status: connection.status,
+    autoEvents: connection.autoEvents,
+    lastEventAt: connection.lastEventAt ? connection.lastEventAt.toISOString() : null,
     createdAt: connection.createdAt.toISOString(),
   }
 }

@@ -40,6 +40,10 @@ model User {
   title        String?
   timezone     String   @default("UTC")
   avatarColor  String   @default("#e11d48")
+  // Profile photo (served by /api/files/:id) — falls back to color initials
+  avatarUrl    String?
+  // Profile cover / background photo shown behind the avatar in the profile dialog
+  bannerUrl    String?
   // human | agent
   kind         String   @default("human")
   // owner | admin | member
@@ -332,6 +336,11 @@ model ConnectorConnection {
   connectedBy  User?    @relation("ConnectorConnectedBy", fields: [connectedById], references: [id], onDelete: SetNull)
   // connected | disconnected
   status       String   @default("connected")
+  // Live-stream switch: when on, the scheduler posts subscribed events
+  // autonomously (like a real integration receiving webhooks)
+  autoEvents   Boolean  @default(true)
+  // Telemetry for the connection card ("last event 4m ago")
+  lastEventAt  DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

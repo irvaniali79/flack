@@ -314,9 +314,13 @@ export function Composer({ parentId, placeholder }: { parentId?: string; placeho
   const [menuIndex, setMenuIndex] = useState(0)
   const [dragging, setDragging] = useState(false)
   const [focused, setFocused] = useState(false)
+  const [sending, setSending] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const lastTypingEmit = useRef(0)
+  // synchronous double-send guard — a ref (not state) so rapid Enter/confirm clicks
+  // cannot re-enter submit() before the first send's await resolves
+  const sendingRef = useRef(false)
 
   // editing state: load message into the box
   const editingMessage = useMemo(() => {
@@ -568,10 +572,15 @@ export function Composer({ parentId, placeholder }: { parentId?: string; placeho
   }
 
   const submit = async () => {
+    // debounce duplicate sends: rapid Enter presses / double clicks on Send
+    // must not fire a second request while the first is still in flight
+    if (sendingRef.current) return
     const body = text.trim()
     if (!body && files.length === 0) return
     if (!body) return
     if (!channelId) return
+    sendingRef.current = true
+    setSending(true)
     try {
       if (editingMessage) {
         await editMessage(editingMessage.id, body)
@@ -586,6 +595,9 @@ export function Composer({ parentId, placeholder }: { parentId?: string; placeho
       clearComposer()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not send message')
+    } finally {
+      sendingRef.current = false
+      setSending(false)
     }
   }
 
@@ -973,10 +985,14 @@ export function Composer({ parentId, placeholder }: { parentId?: string; placeho
               type="button"
               aria-label={editingMessage ? 'Save changes' : 'Send message'}
               onClick={() => void submit()}
-              disabled={(!text.trim() && files.length === 0) || uploading > 0}
+              disabled={(!text.trim() && files.length === 0) || uploading > 0 || sending}
               className="flex h-7 items-center gap-1 rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white transition-all duration-150 hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <Check className="h-3.5 w-3.5" aria-hidden />
+              {sending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+              ) : (
+                <Check className="h-3.5 w-3.5" aria-hidden />
+              )}
               {editingMessage ? 'Save' : 'Send'}
             </button>
           </div>
