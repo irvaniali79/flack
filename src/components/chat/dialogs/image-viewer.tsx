@@ -27,11 +27,11 @@ export function ImageViewer() {
             <DialogDescription className="sr-only">Image preview</DialogDescription>
 
             {/* image stage */}
-            <div className="relative flex max-h-[74vh] items-center justify-center bg-zinc-950/95 p-3">
+            <div className="relative flex max-h-[calc(74vh/var(--ui-scale))] items-center justify-center bg-zinc-950/95 p-3">
               <img
                 src={viewer.url}
                 alt={viewer.name}
-                className="max-h-[70vh] max-w-full rounded-lg object-contain"
+                className="max-h-[calc(70vh/var(--ui-scale))] max-w-full rounded-lg object-contain"
               />
               <DialogClose
                 aria-label="Close image viewer"

@@ -29,16 +29,20 @@ const FONT_SIZE_KEY = 'flack-font-size'
 let accentRequestSeq = 0
 
 /**
- * Per-user display zoom (font size). Applied as a CSS `zoom` on <html> so the
- * whole UI — text, spacing, icons — scales together, exactly like the
- * browser's own zoom. Clamped to 0.8–1.5 and persisted to localStorage for
- * the pre-paint script in layout.tsx (no size flash on reload).
+ * Per-user display zoom (font size). Applied via the --ui-scale custom property
+ * on <html> (globals.css: `zoom: var(--ui-scale)`), so the whole UI — text,
+ * spacing, icons — scales together, exactly like the browser's own zoom.
+ * Viewport-unit lengths are NOT zoom-compensated by the browser, so every
+ * full-viewport height divides by --ui-scale (h-app / min-h-app utilities,
+ * max-h-[calc(NNvh/var(--ui-scale))] on dialogs) — the layout never reflows
+ * or scrolls when the scale changes. Clamped to 0.8–1.5 and persisted to
+ * localStorage for the pre-paint script in layout.tsx (no size flash on reload).
  */
 function applyFontSize(scale: number | null | undefined) {
   const value =
     typeof scale === 'number' && Number.isFinite(scale) ? Math.min(1.5, Math.max(0.8, scale)) : 1
   try {
-    document.documentElement.style.zoom = String(value)
+    document.documentElement.style.setProperty('--ui-scale', String(value))
     localStorage.setItem(FONT_SIZE_KEY, String(value))
   } catch {
     // storage unavailable — the zoom still applied above

@@ -42,7 +42,10 @@ export function UserAvatar({
   const showPhoto = !!user.avatarUrl && !photoBroken
 
   return (
-    <span className={cn('relative inline-flex shrink-0', className)}>
+    // Wrapper is rounded-full so any ring/border placed on it (e.g. the
+    // ring-4 behind the xxl profile avatar, ring-2 on stacked member avatars)
+    // paints as a CIRCLE — the avatar inside is always a perfect circle too.
+    <span className={cn('relative inline-flex shrink-0 rounded-full', className)}>
       <span
         className={cn(
           'inline-flex items-center justify-center overflow-hidden font-semibold text-white select-none',

@@ -42,7 +42,7 @@ export function BrowseChannelsDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="max-h-[80vh] overflow-hidden rounded-2xl p-0 sm:max-w-md">
+      <DialogContent className="max-h-[calc(80vh/var(--ui-scale))] overflow-hidden rounded-2xl p-0 sm:max-w-md">
         <DialogHeader className="border-b border-border px-5 pb-3 pt-5">
           <DialogTitle className="flex items-center gap-2">
             <Compass className="h-4 w-4 text-emerald-600" aria-hidden /> Browse channels
@@ -62,7 +62,7 @@ export function BrowseChannelsDialog() {
           </div>
         </DialogHeader>
 
-        <div className="max-h-[60vh] space-y-0.5 overflow-y-auto p-2">
+        <div className="max-h-[calc(60vh/var(--ui-scale))] space-y-0.5 overflow-y-auto p-2">
           {publicChannels.length === 0 ? (
             <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
               <Compass className="h-8 w-8 text-muted-foreground/40" aria-hidden />

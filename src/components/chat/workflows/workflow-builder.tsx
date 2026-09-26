@@ -258,7 +258,7 @@ export function WorkflowBuilder({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[88vh] flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-2xl">
+      <DialogContent className="flex max-h-[calc(88vh/var(--ui-scale))] flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-2xl">
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 md:px-6">
           <DialogHeader className="text-left">
             <DialogTitle className="flex items-center gap-2">

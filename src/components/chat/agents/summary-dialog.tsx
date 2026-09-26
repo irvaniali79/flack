@@ -48,7 +48,7 @@ export function SummaryDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto rounded-2xl sm:max-w-lg">
+      <DialogContent className="max-h-[calc(85vh/var(--ui-scale))] overflow-y-auto rounded-2xl sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-emerald-600" aria-hidden />

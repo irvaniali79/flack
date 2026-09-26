@@ -125,7 +125,7 @@ export function ConnectDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => !busy && onOpenChange(next)}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto rounded-2xl sm:max-w-lg">
+      <DialogContent className="max-h-[calc(85vh/var(--ui-scale))] overflow-y-auto rounded-2xl sm:max-w-lg">
         <DialogHeader>
           <div className="flex items-center gap-3">
             <ConnectorTile icon={def.icon} color={def.color} size="lg" />

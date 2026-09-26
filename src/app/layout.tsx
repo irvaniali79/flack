@@ -48,7 +48,7 @@ export default function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html:
-              "(function(){try{var a=localStorage.getItem('flack-accent');if(typeof a==='string'&&a)document.documentElement.dataset.accent=a;var z=parseFloat(localStorage.getItem('flack-font-size'));if(z>=0.8&&z<=1.5)document.documentElement.style.zoom=z}catch(e){}})()",
+              "(function(){try{var a=localStorage.getItem('flack-accent');if(typeof a==='string'&&a)document.documentElement.dataset.accent=a;var z=parseFloat(localStorage.getItem('flack-font-size'));if(z>=0.8&&z<=1.5)document.documentElement.style.setProperty('--ui-scale',z)}catch(e){}})()",
           }}
         />
         <ThemeProvider

@@ -154,7 +154,7 @@ export function ProfileDialog() {
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && setProfileUserId(null)}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-2xl p-0 sm:max-w-sm">
+      <DialogContent className="max-h-[calc(100dvh/var(--ui-scale)-2rem)] overflow-y-auto rounded-2xl p-0 sm:max-w-sm">
         {/* banner / cover photo */}
         {bannerSrc ? (
           <div className="relative h-28 w-full bg-muted">

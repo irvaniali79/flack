@@ -143,7 +143,7 @@ export function AuthScreen() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background lg:flex-row">
+    <div className="flex min-h-app flex-col bg-background lg:flex-row">
       {/* ── Left brand panel ─────────────────────────────────────────────── */}
       <div className="relative flex flex-col justify-between overflow-hidden bg-accent-deep px-8 py-10 text-zinc-100 lg:w-[52%] lg:px-14 lg:py-14">
         {/* backdrop: grid + emerald glow */}

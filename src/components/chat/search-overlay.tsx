@@ -133,7 +133,7 @@ export function SearchOverlay() {
 
   return (
     <Dialog open={open} onOpenChange={(next) => setSearchOpen(next)}>
-      <DialogContent className="top-[12%] max-h-[75vh] translate-y-0 gap-0 overflow-hidden p-0 rounded-2xl sm:max-w-xl">
+      <DialogContent className="top-[12%] max-h-[calc(75vh/var(--ui-scale))] translate-y-0 gap-0 overflow-hidden p-0 rounded-2xl sm:max-w-xl">
         <DialogHeader className="border-b border-border px-4 py-3 text-left">
           <DialogTitle className="sr-only">Search</DialogTitle>
           <DialogDescription className="sr-only">Search messages, channels and people</DialogDescription>
@@ -188,7 +188,7 @@ export function SearchOverlay() {
           ))}
         </div>
 
-        <div className="max-h-[52vh] overflow-y-auto p-2">
+        <div className="max-h-[calc(52vh/var(--ui-scale))] overflow-y-auto p-2">
           {!trimmed ? (
             <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
               <Search className="h-8 w-8 text-muted-foreground/40" aria-hidden />

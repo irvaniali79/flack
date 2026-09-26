@@ -148,7 +148,7 @@ export function ForwardDialog() {
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && setForwardingMessageId(null)}>
-      <DialogContent className="max-h-[85vh] gap-0 overflow-hidden rounded-xl p-0 sm:max-w-md">
+      <DialogContent className="max-h-[calc(85vh/var(--ui-scale))] gap-0 overflow-hidden rounded-xl p-0 sm:max-w-md">
         <DialogHeader className="border-b border-border px-5 py-4">
           <DialogTitle className="flex items-center gap-2 text-base">
             <Send className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden />

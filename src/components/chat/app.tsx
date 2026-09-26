@@ -32,7 +32,7 @@ import { ConnectorsView } from './connectors/connectors-view'
 
 function Splash() {
   return (
-    <div className="flex h-dvh flex-col items-center justify-center gap-4 bg-background">
+    <div className="flex h-app flex-col items-center justify-center gap-4 bg-background">
       <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-600 text-2xl font-black text-white shadow-lg shadow-emerald-600/20">
         A
       </div>
@@ -130,8 +130,11 @@ export function ChatApp() {
     return bootstrapping ? <Splash /> : <AuthScreen />
   }
 
+  // h-app = 100dvh / --ui-scale — root zoom multiplies viewport-unit lengths,
+  // so the shell must divide by the per-user scale to stay exactly one viewport
+  // tall (no page scroll, composer/user row never pushed off-screen).
   return (
-    <div className="flex h-dvh w-full overflow-hidden bg-background">
+    <div className="flex h-app w-full overflow-hidden bg-background">
       {!isMobile && <Rail />}
       {!isMobile && (
         // `dark` class — the sidebar chrome is mode-independent (saturated in light & dark)

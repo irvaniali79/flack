@@ -128,7 +128,7 @@ export function AgentForm({ agent, onSaved, onCancel }: AgentFormProps) {
         </DialogDescription>
       </DialogHeader>
 
-      <div className="max-h-[55vh] space-y-4 overflow-y-auto pr-1">
+      <div className="max-h-[calc(55vh/var(--ui-scale))] space-y-4 overflow-y-auto pr-1">
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <Label htmlFor="agent-name">Name</Label>

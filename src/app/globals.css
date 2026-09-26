@@ -51,6 +51,9 @@
 
 :root {
   --radius: 0.625rem;
+  /* Per-user UI scale (Settings → Theme → Font size). Drives root `zoom` below;
+     set inline on <html> by the pre-paint script + the store. */
+  --ui-scale: 1;
   /* ── Themed surfaces ── derived from the ACTIVE accent ramp (--color-emerald-*),
      so they auto-adapt when [data-accent] overrides the ramp. The canvas itself
      (--background) carries a whisper of the hue. The SIDEBAR CHROME (rail +
@@ -313,6 +316,26 @@
   --color-emerald-800: #9c162a;
   --color-emerald-900: #83182a;
   --color-emerald-950: #480711;
+}
+
+/* ─── Per-user UI scale (Settings → Theme → Font size) ──────────────────────
+   Applied as root `zoom` so px AND rem scale together (browser-zoom feel).
+   ⚠ Viewport-unit lengths (vh/dvh/vw) are NOT zoom-compensated by the browser —
+   their used values get MULTIPLIED by zoom — so a `h-dvh` shell would render
+   taller than the viewport and push the composer / sidebar user row below the
+   fold. Every viewport-unit height must therefore DIVIDE by --ui-scale:
+   use the h-app / min-h-app utilities below, or max-h-[calc(NNvh/var(--ui-scale))]
+   for dialogs. Percentages and fixed-CB insets (w-full, inset-0, inset-y-0,
+   left-[50%]) ARE zoom-aware and need no compensation. */
+html {
+  zoom: var(--ui-scale);
+}
+
+@utility h-app {
+  height: calc(100dvh / var(--ui-scale));
+}
+@utility min-h-app {
+  min-height: calc(100vh / var(--ui-scale));
 }
 
 @layer base {

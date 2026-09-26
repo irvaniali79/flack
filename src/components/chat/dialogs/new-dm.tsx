@@ -70,7 +70,7 @@ export function NewDmDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="max-h-[85vh] overflow-hidden rounded-2xl p-0 sm:max-w-md">
+      <DialogContent className="max-h-[calc(85vh/var(--ui-scale))] overflow-hidden rounded-2xl p-0 sm:max-w-md">
         <DialogHeader className="border-b border-border px-5 pb-3 pt-5">
           <DialogTitle className="flex items-center gap-2">
             <MessageSquarePlus className="h-4 w-4 text-emerald-600" aria-hidden /> New conversation
@@ -108,7 +108,7 @@ export function NewDmDialog() {
           </div>
         )}
 
-        <div className="max-h-[50vh] space-y-0.5 overflow-y-auto p-2">
+        <div className="max-h-[calc(50vh/var(--ui-scale))] space-y-0.5 overflow-y-auto p-2">
           {candidates.length === 0 ? (
             <p className="px-4 py-10 text-center text-sm text-muted-foreground">No people found</p>
           ) : (

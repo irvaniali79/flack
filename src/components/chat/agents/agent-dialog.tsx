@@ -163,7 +163,7 @@ export function AgentDialog({ open, onOpenChange }: AgentDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto rounded-2xl sm:max-w-lg">
+      <DialogContent className="max-h-[calc(85vh/var(--ui-scale))] overflow-y-auto rounded-2xl sm:max-w-lg">
         {view === 'form' ? (
           <AgentForm
             key={editing?.id ?? 'new'}

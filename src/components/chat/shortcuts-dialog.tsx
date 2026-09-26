@@ -106,7 +106,7 @@ export function ShortcutsDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setShortcutsOpen}>
-      <DialogContent className="top-[12%] max-h-[80vh] translate-y-0 gap-0 overflow-y-auto rounded-2xl p-0 sm:max-w-2xl">
+      <DialogContent className="top-[12%] max-h-[calc(80vh/var(--ui-scale))] translate-y-0 gap-0 overflow-y-auto rounded-2xl p-0 sm:max-w-2xl">
         <DialogHeader className="border-b border-border px-5 py-4 text-left">
           <DialogTitle className="flex items-center gap-2 text-base font-bold">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600/15 text-emerald-600 dark:text-emerald-400">
