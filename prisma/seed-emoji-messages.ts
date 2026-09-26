@@ -17,8 +17,8 @@ async function main() {
     where: { orgId: org.id, slug: 'random' },
     select: { id: true, name: true },
   })
-  const priya = await db.user.findFirst({ where: { email: 'priya@acme.test' }, select: { id: true } })
-  const marcus = await db.user.findFirst({ where: { email: 'marcus@acme.test' }, select: { id: true } })
+  const priya = await db.user.findFirst({ where: { email: 'priya@flack.test' }, select: { id: true } })
+  const marcus = await db.user.findFirst({ where: { email: 'marcus@flack.test' }, select: { id: true } })
 
   const already = await db.message.findFirst({
     where: { body: { contains: ':party_parrot:' } },
@@ -34,7 +34,7 @@ async function main() {
       data: {
         channelId: engineering.id,
         senderId: priya.id,
-        body: 'Custom emoji are live in this workspace! Try :ship_it: :party_parrot: :acme: :lgtm_llama: — upload more in Admin → Emoji 🎨',
+        body: 'Custom emoji are live in this workspace! Try :ship_it: :party_parrot: :flack: :lgtm_llama: — upload more in Admin → Emoji 🎨',
         mentions: JSON.stringify({ userIds: [], specials: [] }),
       },
     })
@@ -50,11 +50,11 @@ async function main() {
         mentions: JSON.stringify({ userIds: [], specials: [] }),
       },
     })
-    const emma = await db.user.findFirst({ where: { email: 'emma@acme.test' }, select: { id: true } })
+    const emma = await db.user.findFirst({ where: { email: 'emma@flack.test' }, select: { id: true } })
     if (emma) {
       await db.reaction.create({ data: { messageId: root.id, userId: emma.id, emoji: ':party_parrot:' } })
     }
-    const tom = await db.user.findFirst({ where: { email: 'tom@acme.test' }, select: { id: true } })
+    const tom = await db.user.findFirst({ where: { email: 'tom@flack.test' }, select: { id: true } })
     if (tom) {
       await db.reaction.create({ data: { messageId: root.id, userId: tom.id, emoji: ':ship_it:' } })
     }

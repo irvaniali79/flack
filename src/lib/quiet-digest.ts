@@ -26,9 +26,9 @@ function digestBody(
   })
   return (
     `Hi ${userName.split(' ')[0]},\n\n` +
-    `Here's what happened in Acme Chat while your notifications were paused:\n\n` +
+    `Here's what happened in Flack Chat while your notifications were paused:\n\n` +
     `${lines.join('\n\n')}\n\n` +
-    `— Acme Chat (sent by the digest mailer at the end of your quiet hours)`
+    `— Flack Chat (sent by the digest mailer at the end of your quiet hours)`
   )
 }
 

@@ -17,7 +17,7 @@ import {
   scheduleSentence,
 } from '@/lib/workflows/schedule'
 
-const BOT_EMAIL = 'workflows@acme.local'
+const BOT_EMAIL = 'workflows@flack.local'
 const TRUNCATE_LABEL = 48
 
 const messageInclude = {

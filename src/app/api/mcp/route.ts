@@ -1,9 +1,9 @@
-// Acme Chat MCP server — Model Context Protocol over HTTP (Streamable HTTP
+// Flack Chat MCP server — Model Context Protocol over HTTP (Streamable HTTP
 // transport, POST-only JSON-RPC 2.0). This is the platform's key
 // differentiator: external AI clients (Claude Desktop, Cursor, custom agents)
 // get first-class access to the same API humans use in the app.
 //
-// Auth:  `Authorization: Bearer acme_…` API key (create one in the app under
+// Auth:  `Authorization: Bearer flack_…` API key (create one in the app under
 //        Integrations). Session-cookie auth also works — that is what the
 //        in-app tool playground uses.
 //
@@ -29,7 +29,7 @@ import {
 } from '@/lib/mcp/tools'
 
 const PROTOCOL_VERSION = '2025-03-26'
-const SERVER_INFO = { name: 'acme-chat', version: '1.0.0' }
+const SERVER_INFO = { name: 'flack-chat', version: '1.0.0' }
 
 type JsonRpcId = string | number | null
 
@@ -70,7 +70,7 @@ async function resolveActor(request: Request): Promise<
   if (!sessionUser) {
     return {
       ok: false,
-      response: err(null, -32001, 'Authenticate with an API key (Authorization: Bearer acme_…) or a session cookie'),
+      response: err(null, -32001, 'Authenticate with an API key (Authorization: Bearer flack_…) or a session cookie'),
     }
   }
   // Session (in-app playground) has full access
@@ -152,7 +152,7 @@ const PROMPT_TEMPLATES: PromptTemplate[] = [
       description: `Catch up on #${args.channel ?? '…'}`,
       text:
         `Read the latest messages from the channel "${args.channel ?? ''}" (use the ` +
-        `acme://channels/${args.channel ?? ''}/messages?limit=200 resource, or the read_channel tool). ` +
+        `flack://channels/${args.channel ?? ''}/messages?limit=200 resource, or the read_channel tool). ` +
         `Focus on messages from the last ${args.hours ?? '24'} hours. ` +
         'Then summarize:\n' +
         '1. Key decisions that were made\n' +
@@ -185,7 +185,7 @@ const PROMPT_TEMPLATES: PromptTemplate[] = [
     render: (args) => ({
       description: `Standup draft from #${args.channel ?? '…'}`,
       text:
-        `Read the last 24 hours from "${args.channel ?? ''}" (acme://channels/${args.channel ?? ''}/messages?limit=200). ` +
+        `Read the last 24 hours from "${args.channel ?? ''}" (flack://channels/${args.channel ?? ''}/messages?limit=200). ` +
         'Then draft MY standup update as if I posted in that channel yesterday:\n' +
         '• Shipped / landed (from deploys, PRs and completion talk)\n' +
         '• In flight (what the team was mid-way through)\n' +
@@ -250,10 +250,10 @@ async function handleMessage(request: Request, msg: JsonRpcRequest): Promise<Res
         },
         serverInfo: SERVER_INFO,
         instructions:
-          'Acme Chat MCP server. Tools: post_message, read_channel, search_messages, list_channels, ' +
-          'get_thread, add_reaction, create_channel. Resources: acme://channels/{slug} ' +
+          'Flack Chat MCP server. Tools: post_message, read_channel, search_messages, list_channels, ' +
+          'get_thread, add_reaction, create_channel. Resources: flack://channels/{slug} ' +
           '(recent messages — list with resources/list, read with resources/read) and the ' +
-          'parameterized template acme://channels/{slug}/messages?limit=N (see resources/templates/list). ' +
+          'parameterized template flack://channels/{slug}/messages?limit=N (see resources/templates/list). ' +
           'Prompts: catch_up, thread_review, standup (reusable instruction templates — list with prompts/list, render with prompts/get). ' +
           'Sampling: sampling/createMessage runs a server-side LLM completion — summarize or draft without shipping your own model. ' +
           'All actions run as ' +
@@ -301,7 +301,7 @@ async function handleMessage(request: Request, msg: JsonRpcRequest): Promise<Res
                 ? `Group DM: ${otherNames.slice(0, 3).join(', ')}${otherNames.length > 3 ? ` +${otherNames.length - 3}` : ''}`
                 : `#${c.slug}`
           return {
-            uri: `acme://channels/${c.slug}`,
+            uri: `flack://channels/${c.slug}`,
             name: label,
             description:
               (c.topic && c.topic.trim().slice(0, 120)) ||
@@ -317,7 +317,7 @@ async function handleMessage(request: Request, msg: JsonRpcRequest): Promise<Res
       return ok(id, {
         resourceTemplates: [
           {
-            uriTemplate: 'acme://channels/{slug}/messages?limit={limit}',
+            uriTemplate: 'flack://channels/{slug}/messages?limit={limit}',
             name: 'Channel messages',
             description:
               'Latest messages from any readable channel. slug is the channel slug (see resources/list); ' +
@@ -334,14 +334,14 @@ async function handleMessage(request: Request, msg: JsonRpcRequest): Promise<Res
       if (actor.scopes && !actor.scopes.has('channels:read')) {
         return err(id, -32602, 'This API key lacks the "channels:read" scope required for resources')
       }
-      // acme://channels/{slug}                → latest 50
-      // acme://channels/{slug}/messages?limit=N → latest N (1-200)
-      const match = /^acme:\/\/channels\/([a-z0-9-]+)(\/messages)?(?:\?limit=(\d+))?$/.exec(uri)
+      // flack://channels/{slug}                → latest 50
+      // flack://channels/{slug}/messages?limit=N → latest N (1-200)
+      const match = /^flack:\/\/channels\/([a-z0-9-]+)(\/messages)?(?:\?limit=(\d+))?$/.exec(uri)
       if (!match) {
         return err(
           id,
           -32602,
-          'Invalid resource uri — expected acme://channels/{slug} or acme://channels/{slug}/messages?limit=N (list with resources/list, templates with resources/templates/list)',
+          'Invalid resource uri — expected flack://channels/{slug} or flack://channels/{slug}/messages?limit=N (list with resources/list, templates with resources/templates/list)',
         )
       }
       const [, slug, , limitRaw] = match
@@ -467,7 +467,7 @@ async function handleMessage(request: Request, msg: JsonRpcRequest): Promise<Res
         return ok(id, {
           role: 'assistant' as const,
           content: { type: 'text' as const, text: reply },
-          model: 'acme-platform-llm',
+          model: 'flack-platform-llm',
           stopReason: 'end_turn' as const,
         })
       } catch (e) {
@@ -536,7 +536,7 @@ export async function GET() {
       protocolVersion: PROTOCOL_VERSION,
       transport: 'http-jsonrpc',
       methods: ['initialize', 'notifications/initialized', 'ping', 'tools/list', 'tools/call', 'resources/list', 'resources/read', 'resources/templates/list', 'prompts/list', 'prompts/get', 'sampling/createMessage'],
-      auth: 'Authorization: Bearer acme_… (API key) — manage keys in the app: Integrations view',
+      auth: 'Authorization: Bearer flack_… (API key) — manage keys in the app: Integrations view',
       note: 'Send JSON-RPC 2.0 requests via POST. SSE streaming is not enabled.',
     },
     { status: 405, headers: { Allow: 'POST' } },

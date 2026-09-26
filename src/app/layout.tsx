@@ -15,17 +15,17 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Acme Chat — Where work happens",
+  title: "Flack Chat — Where work happens",
   description:
-    "Acme Chat is your team workspace: channels, DMs, threads, AI agents as teammates, and automations — all in one place.",
-  keywords: ["Acme Chat", "team chat", "AI agents", "workflows", "messaging"],
+    "Flack Chat is your team workspace: channels, DMs, threads, AI agents as teammates, and automations — all in one place.",
+  keywords: ["Flack Chat", "team chat", "AI agents", "workflows", "messaging"],
   icons: {
     icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
   },
   openGraph: {
-    title: "Acme Chat — Where work happens",
+    title: "Flack Chat — Where work happens",
     description: "Channels, DMs & threads with AI teammates and automations.",
-    siteName: "Acme Chat",
+    siteName: "Flack Chat",
     type: "website",
   },
 };
@@ -48,7 +48,7 @@ export default function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html:
-              "(function(){try{var a=localStorage.getItem('acme-accent');if(typeof a==='string'&&a)document.documentElement.dataset.accent=a;var z=parseFloat(localStorage.getItem('acme-font-size'));if(z>=0.8&&z<=1.5)document.documentElement.style.zoom=z}catch(e){}})()",
+              "(function(){try{var a=localStorage.getItem('flack-accent');if(typeof a==='string'&&a)document.documentElement.dataset.accent=a;var z=parseFloat(localStorage.getItem('flack-font-size'));if(z>=0.8&&z<=1.5)document.documentElement.style.zoom=z}catch(e){}})()",
           }}
         />
         <ThemeProvider

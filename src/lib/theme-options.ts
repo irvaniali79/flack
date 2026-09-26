@@ -19,7 +19,7 @@ export const ACCENT_THEMES: AccentThemeDef[] = [
     name: 'Emerald',
     // Matches the compiled Tailwind v4 emerald 400/500/600 actually rendered
     swatches: ['#00d294', '#00bb7f', '#009767'],
-    vibe: 'The Acme default — fresh and focused',
+    vibe: 'The Flack default — fresh and focused',
   },
   {
     key: 'aubergine',

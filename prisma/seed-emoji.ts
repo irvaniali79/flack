@@ -12,9 +12,9 @@ const UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'emoji')
 
 // ─── The SVG art ─────────────────────────────────────────────────────────────
 
-const SVG_ACME = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+const SVG_FLACK = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <rect x="4" y="4" width="56" height="56" rx="14" fill="#059669"/>
-  <path d="M32 14 L45 50 H38.5 L36 43 H28 L25.5 50 H19 Z M32 26.5 L29.8 36.5 H34.2 Z" fill="#fff"/>
+  <path d="M22 13 H46 V20.5 H29.5 V28 H43 V35.5 H29.5 V51 H22 Z" fill="#fff"/>
 </svg>`
 
 const SVG_SHIP_IT = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
@@ -54,7 +54,7 @@ const SVG_LLGAM = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
 </svg>`
 
 const SEEDS: Array<{ name: string; svg: string }> = [
-  { name: 'acme', svg: SVG_ACME },
+  { name: 'flack', svg: SVG_FLACK },
   { name: 'ship_it', svg: SVG_SHIP_IT },
   { name: 'party_parrot', svg: SVG_PARTY_PARROT },
   { name: 'lgtm_llama', svg: SVG_LLGAM },
@@ -68,7 +68,7 @@ async function main() {
     console.error('No org found — run prisma/seed.ts first')
     process.exit(1)
   }
-  const sarah = await db.user.findFirst({ where: { email: 'sarah@acme.test' }, select: { id: true } })
+  const sarah = await db.user.findFirst({ where: { email: 'sarah@flack.test' }, select: { id: true } })
 
   await mkdir(UPLOAD_DIR, { recursive: true })
 

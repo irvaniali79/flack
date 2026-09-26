@@ -25,7 +25,7 @@ export async function GET() {
 
     return {
       me: serializeUser(me),
-      org: { name: org?.name ?? 'Acme' },
+      org: { name: org?.name ?? 'Flack' },
       users: users.map(serializeUser),
       channels,
       agents: agents.map(serializeAgent),

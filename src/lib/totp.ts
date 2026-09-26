@@ -90,7 +90,7 @@ export function generateTotpSecret(): string {
 }
 
 /** The otpauth:// provisioning URI authenticators scan as a QR code. */
-export function otpauthUri(email: string, secretBase32: string, issuer = 'Acme Chat'): string {
+export function otpauthUri(email: string, secretBase32: string, issuer = 'Flack Chat'): string {
   const label = encodeURIComponent(`${issuer}:${email}`)
   return (
     `otpauth://totp/${label}?secret=${secretBase32}` +
@@ -109,9 +109,9 @@ function randomWord(len: number): string {
   return out
 }
 
-/** 8 one-time recovery codes, e.g. "acme-k7m2-x9pq" (returned in plain text ONCE). */
+/** 8 one-time recovery codes, e.g. "flack-k7m2-x9pq" (returned in plain text ONCE). */
 export function generateRecoveryCodes(count = 8): string[] {
-  return Array.from({ length: count }, () => `acme-${randomWord(4)}-${randomWord(4)}`)
+  return Array.from({ length: count }, () => `flack-${randomWord(4)}-${randomWord(4)}`)
 }
 
 export function hashRecoveryCode(code: string): string {

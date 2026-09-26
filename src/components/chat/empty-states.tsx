@@ -20,7 +20,7 @@ export function NoChannelSelected() {
         <Hash className="h-9 w-9 text-muted-foreground/90" strokeWidth={2.2} aria-hidden />
       </div>
       <div className="relative">
-        <h2 className="text-xl font-bold tracking-tight">Welcome to Acme Chat</h2>
+        <h2 className="text-xl font-bold tracking-tight">Welcome to Flack Chat</h2>
         <p className="mt-1.5 max-w-xs text-sm leading-relaxed text-foreground/75 dark:text-zinc-400">
           Pick a channel or conversation on the left to get started.
         </p>

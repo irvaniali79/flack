@@ -1,7 +1,7 @@
 'use client'
 // Slack bot API compatibility section — surfaces /api/slack/<method>.
 // Lets teams point existing Slack bots (@slack/bolt, python slack_sdk, hubot…)
-// at this workspace with a base-URL override + an Acme API key.
+// at this workspace with a base-URL override + an Flack API key.
 import { useEffect, useState } from 'react'
 import {
   ArrowRight,
@@ -157,7 +157,7 @@ export function SlackApiSection({ origin }: { origin: string }) {
   const endpoint = `${origin}/api/slack`
 
   const curlSnippet = `curl -X POST ${endpoint}/chat.postMessage \\
-  -H "Authorization: Bearer acme_YOUR_KEY" \\
+  -H "Authorization: Bearer flack_YOUR_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"channel":"general","text":"*hello* from my Slack bot"}'`
 
@@ -165,7 +165,7 @@ export function SlackApiSection({ origin }: { origin: string }) {
 import bolt from '@slack/bolt';
 
 const app = new bolt.App({
-  token: process.env.SLACK_BOT_TOKEN,        // acme_… key from this page
+  token: process.env.SLACK_BOT_TOKEN,        // flack_… key from this page
   appToken: process.env.SLACK_APP_TOKEN,     // any non-empty string
   socketMode: false,
   // the one line that migrates the bot:
@@ -183,7 +183,7 @@ import os
 from slack_sdk import WebClient
 
 client = WebClient(
-    token=os.environ["SLACK_BOT_TOKEN"],     # acme_… key
+    token=os.environ["SLACK_BOT_TOKEN"],     # flack_… key
     base_url="${endpoint}/",
 )
 
@@ -218,7 +218,7 @@ client.chat_postMessage(channel="general", text="*hello* from Python 🐍")`
             <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-foreground/80">slack.com/api</code>
             <ArrowRight className="h-3 w-3" aria-hidden />
             <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-foreground/80">{origin}/api/slack</code>
-            <span>+ <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-foreground/80">xoxb-…</code> → <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-foreground/80">acme_…</code></span>
+            <span>+ <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-foreground/80">xoxb-…</code> → <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-foreground/80">flack_…</code></span>
           </span>
         </div>
 

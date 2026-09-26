@@ -195,16 +195,16 @@ function ResourcesSection({ origin }: { origin: string }) {
   }, [load])
 
   const readSnippet = `curl -X POST ${origin}/api/mcp \\
-  -H "Authorization: Bearer acme_YOUR_KEY" \\
+  -H "Authorization: Bearer flack_YOUR_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"jsonrpc":"2.0","id":1,"method":"resources/read",
-       "params":{"uri":"acme://channels/general"}}'`
+       "params":{"uri":"flack://channels/general"}}'`
 
   const templateSnippet = `curl -X POST ${origin}/api/mcp \\
-  -H "Authorization: Bearer acme_YOUR_KEY" \\
+  -H "Authorization: Bearer flack_YOUR_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"jsonrpc":"2.0","id":1,"method":"resources/read",
-       "params":{"uri":"acme://channels/engineering/messages?limit=10"}}'`
+       "params":{"uri":"flack://channels/engineering/messages?limit=10"}}'`
 
   return (
     <section aria-labelledby="resources-heading" className="space-y-3">
@@ -283,7 +283,7 @@ function ResourcesSection({ origin }: { origin: string }) {
               exposes one URI template so clients can request any channel with a size that fits their
               context window:{' '}
               <code className="rounded bg-muted px-1 font-mono text-[10px] text-teal-700 dark:text-teal-300">
-                acme://channels/{'{slug}'}/messages?limit=N
+                flack://channels/{'{slug}'}/messages?limit=N
               </code>{' '}
               (N between 1 and 200, default 50).
             </p>
@@ -333,7 +333,7 @@ function PromptsSection({ origin }: { origin: string }) {
   }, [load])
 
   const getSnippet = `curl -X POST ${origin}/api/mcp \\
-  -H "Authorization: Bearer acme_YOUR_KEY" \\
+  -H "Authorization: Bearer flack_YOUR_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"jsonrpc":"2.0","id":1,"method":"prompts/get",
        "params":{"name":"catch_up",
@@ -432,7 +432,7 @@ function SamplingSection({ origin }: { origin: string }) {
           id: 12,
           method: 'sampling/createMessage',
           params: {
-            systemPrompt: 'You are the Acme Chat sampling endpoint. Reply with exactly one short, witty sentence.',
+            systemPrompt: 'You are the Flack Chat sampling endpoint. Reply with exactly one short, witty sentence.',
             messages: [
               { role: 'user', content: { type: 'text', text: 'Write a one-line haiku about shipping code on a Friday.' } },
             ],
@@ -453,7 +453,7 @@ function SamplingSection({ origin }: { origin: string }) {
   }, [busy])
 
   const samplingSnippet = `curl -X POST ${origin}/api/mcp \\
-  -H "Authorization: Bearer acme_YOUR_KEY" \\
+  -H "Authorization: Bearer flack_YOUR_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"jsonrpc":"2.0","id":1,"method":"sampling/createMessage",
        "params":{
@@ -507,7 +507,7 @@ function SamplingSection({ origin }: { origin: string }) {
           <div className="rounded-lg border border-amber-500/30 bg-background px-3 py-2.5">
             <p className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
               <Bot className="h-3 w-3" aria-hidden />
-              acme-platform-llm
+              flack-platform-llm
             </p>
             <p className="text-sm leading-relaxed">{reply}</p>
           </div>
@@ -564,17 +564,17 @@ export function IntegrationsView() {
   const endpoint = `${origin}/api/mcp`
 
   const curlSnippet = `curl -X POST ${endpoint} \\
-  -H "Authorization: Bearer acme_YOUR_KEY" \\
+  -H "Authorization: Bearer flack_YOUR_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'`
 
   const claudeSnippet = `// ~/Library/Application Support/Claude/claude_desktop_config.json
 {
   "mcpServers": {
-    "acme-chat": {
+    "flack-chat": {
       "type": "http",
       "url": "${endpoint}",
-      "headers": { "Authorization": "Bearer acme_YOUR_KEY" }
+      "headers": { "Authorization": "Bearer flack_YOUR_KEY" }
     }
   }
 }`
@@ -582,9 +582,9 @@ export function IntegrationsView() {
   const cursorSnippet = `// ~/.cursor/mcp.json
 {
   "mcpServers": {
-    "acme-chat": {
+    "flack-chat": {
       "url": "${endpoint}",
-      "headers": { "Authorization": "Bearer acme_YOUR_KEY" }
+      "headers": { "Authorization": "Bearer flack_YOUR_KEY" }
     }
   }
 }`

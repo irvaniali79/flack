@@ -1,4 +1,4 @@
-# Acme Chat 💬
+# Flack Chat 💬
 
 **A Slack-style team chat platform** — channels, DMs, threads, AI agents, workflow automation, 20 real connectors, and a Slack-compatible API. Built as a production-grade reference app with Next.js 16.
 
@@ -102,7 +102,7 @@ The login screen lists one-click demo users. The primary account:
 
 | Email | Password | Role |
 |---|---|---|
-| `sarah@acme.test` | `demo1234` | Workspace owner |
+| `sarah@flack.test` | `demo1234` | Workspace owner |
 
 ---
 

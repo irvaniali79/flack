@@ -1,6 +1,6 @@
-# Acme Chat — Project Download
+# Flack Chat — Project Download
 
-**Archive:** `acme-chat-project.zip` (≈4.5 MB, 1,521 files)
+**Archive:** `new-x.zip` (the current canonical build)
 
 A Slack-style team chat platform with AI Agents, MCP-style tools, workflow automation, a 20-connector App Directory (Google Calendar, Google Drive, GitHub, Zoom, …), 12 color accent themes, Slack migration tooling, and a Slack-compatible API layer.
 
@@ -34,7 +34,7 @@ Excluded from the archive (regenerable): `node_modules/`, `.next/`, `skills/`, `
 
 ```bash
 # 1) Extract & enter
-unzip acme-chat-project.zip && cd my-project
+unzip new-x.zip && cd my-project
 
 # 2) Point the DB at your local copy
 #    Edit .env — replace the absolute sandbox path with:
@@ -62,8 +62,8 @@ cd ../scheduler-service && bun run dev
 
 ## 4. Log in
 
-- **Owner (full admin):** `sarah@acme.test` / `demo1234`
-- **Member (limited perms):** `priya@acme.test` / `demo1234`
+- **Owner (full admin):** `sarah@flack.test` / `demo1234`
+- **Member (limited perms):** `priya@flack.test` / `demo1234`
 - All seeded humans share the password `demo1234`. There's also a one-click demo-login on the auth screen.
 
 ---

@@ -107,7 +107,7 @@ model ApiKey {
   name      String
   // SHA-256 hex digest of the full key — the full key is shown exactly once
   keyHash   String    @unique
-  // First 12 chars of the key, for display + lookup ("acme_ab12cd34ef56")
+  // First 12 chars of the key, for display + lookup ("flack_ab12cd34ef56")
   keyPrefix String
   // Comma-separated scope list; currently "mcp"
   scopes    String    @default("mcp")
@@ -325,7 +325,7 @@ model ConnectorConnection {
   org          Org      @relation(fields: [orgId], references: [id])
   // Catalog key in src/lib/connectors.ts — "google-calendar", "github", …
   connectorId  String
-  // Demo OAuth account label — "sarah@acme.test" or "Acme Inc / shared drive"
+  // Demo OAuth account label — "sarah@flack.test" or "Flack Inc / shared drive"
   accountLabel String
   // JSON string: { eventId: true } — which of the connector's events post to the channel
   eventSubs    String?

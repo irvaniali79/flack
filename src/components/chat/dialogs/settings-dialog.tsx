@@ -207,7 +207,7 @@ export function SettingsDialog() {
                   </p>
                 )}
                 <p className="mt-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  {me.role} · Acme Inc
+                  {me.role} · Flack Inc
                 </p>
               </div>
             </div>
@@ -486,8 +486,8 @@ export function SettingsDialog() {
             </div>
             <p className="text-xs leading-relaxed text-muted-foreground">
               {activeTheme === 'system'
-                ? 'Acme Chat follows your operating system setting — switch it and the app follows along.'
-                : `You're viewing Acme Chat in ${activeTheme} mode.`}
+                ? 'Flack Chat follows your operating system setting — switch it and the app follows along.'
+                : `You're viewing Flack Chat in ${activeTheme} mode.`}
             </p>
 
             {/* ── Font size / zoom (per user, roams across devices) ─────── */}
@@ -559,7 +559,7 @@ export function SettingsDialog() {
               <div className="space-y-1">
                 <Label>Accent color</Label>
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  Personalize Acme Chat — saved to your profile, so your accent
+                  Personalize Flack Chat — saved to your profile, so your accent
                   follows you on every device.
                 </p>
               </div>

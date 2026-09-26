@@ -1,11 +1,11 @@
 // API keys for programmatic access (MCP server + tool playground).
-// Keys look like: acme_<32 hex chars>. Only the SHA-256 hash is stored;
+// Keys look like: flack_<32 hex chars>. Only the SHA-256 hash is stored;
 // the full key is shown exactly once at creation time.
 import { createHash, randomBytes } from 'crypto'
 import { db } from './db'
 import { HttpError } from './auth'
 
-const KEY_PREFIX = 'acme_'
+const KEY_PREFIX = 'flack_'
 
 // ─── MCP scopes ──────────────────────────────────────────────────────────────
 
@@ -55,7 +55,7 @@ export function generateApiKey(): { key: string; keyHash: string; keyPrefix: str
   return {
     key,
     keyHash: hashApiKey(key),
-    keyPrefix: key.slice(0, KEY_PREFIX.length + 8), // "acme_ab12cd34"
+    keyPrefix: key.slice(0, KEY_PREFIX.length + 8), // "flack_ab12cd34"
   }
 }
 
@@ -72,7 +72,7 @@ export type ApiKeyUser = {
 }
 
 /**
- * Authenticates an `Authorization: Bearer acme_…` header against stored API
+ * Authenticates an `Authorization: Bearer flack_…` header against stored API
  * keys. Throws HttpError 401 on missing/invalid/revoked keys. Updates
  * lastUsedAt fire-and-forget (never blocks or fails the request).
  */

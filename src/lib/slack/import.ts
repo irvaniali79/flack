@@ -247,7 +247,7 @@ export async function importSlackExport(
 
     const realName = su.profile?.real_name || su.profile?.display_name || su.name || su.id
     const isBot = !!su.is_bot
-    const password = `acme-${randomBytes(6).toString('hex')}`
+    const password = `flack-${randomBytes(6).toString('hex')}`
 
     try {
       const created = await db.user.create({

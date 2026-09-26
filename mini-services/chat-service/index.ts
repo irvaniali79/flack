@@ -1,4 +1,4 @@
-// chat-service — realtime socket.io gateway for Acme Chat (Task 1-b)
+// chat-service — realtime socket.io gateway for Flack Chat (Task 1-b)
 //
 // Standalone Bun service (own package.json / deps). Listens on port 3003 (hardcoded).
 // The socket.io path MUST stay '/' — the Caddy gateway routes browser traffic as

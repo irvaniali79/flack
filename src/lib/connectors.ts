@@ -111,8 +111,8 @@ export const CONNECTOR_SAMPLES: Record<string, ConnectorEventInstance[]> = {
     },
     {
       eventId: 'file_updated',
-      title: '“Acme brand guidelines v3.pdf” updated',
-      body: 'Sarah Chen uploaded a new version of “Acme brand guidelines v3.pdf” (v3, 4.1 MB).',
+      title: '“Flack brand guidelines v3.pdf” updated',
+      body: 'Sarah Chen uploaded a new version of “Flack brand guidelines v3.pdf” (v3, 4.1 MB).',
       fields: [
         { label: 'Change', value: 'New version uploaded' },
         { label: 'Size', value: '4.1 MB' },
@@ -158,7 +158,7 @@ export const CONNECTOR_SAMPLES: Record<string, ConnectorEventInstance[]> = {
       title: 'Review requested: PR #479 “Slack import hardening”',
       body: 'Diego Alvarez requested your review on PR #479 “Slack import hardening”.',
       fields: [
-        { label: 'Repository', value: 'acme/chat-platform' },
+        { label: 'Repository', value: 'flack/chat-platform' },
         { label: 'Size', value: '+412 −96 across 9 files' },
       ],
       actions: [{ label: 'Start review', style: 'primary' }],
@@ -240,8 +240,8 @@ export const CONNECTOR_SAMPLES: Record<string, ConnectorEventInstance[]> = {
   jira: [
     {
       eventId: 'issue_created',
-      title: 'ACME-291 created: Notifications badge off by one',
-      body: 'Marcus Reid created ACME-291 “Notifications badge off by one” (Bug · Medium · Backlog).',
+      title: 'FLACK-291 created: Notifications badge off by one',
+      body: 'Marcus Reid created FLACK-291 “Notifications badge off by one” (Bug · Medium · Backlog).',
       fields: [
         { label: 'Type', value: 'Bug · Medium priority' },
         { label: 'Assignee', value: 'Unassigned' },
@@ -250,8 +250,8 @@ export const CONNECTOR_SAMPLES: Record<string, ConnectorEventInstance[]> = {
     },
     {
       eventId: 'status_changed',
-      title: 'ACME-288 moved to In Progress',
-      body: 'Priya Patel moved ACME-288 “Thread follow toggles” from Selected to In Progress.',
+      title: 'FLACK-288 moved to In Progress',
+      body: 'Priya Patel moved FLACK-288 “Thread follow toggles” from Selected to In Progress.',
       fields: [
         { label: 'Sprint', value: 'Sprint 14' },
         { label: 'Status', value: 'Selected → In Progress' },
@@ -338,11 +338,11 @@ export const CONNECTOR_SAMPLES: Record<string, ConnectorEventInstance[]> = {
   box: [
     {
       eventId: 'file_shared',
-      title: 'Shared: “Acme — Q4 roadmap.pptx”',
-      body: 'Sarah Chen shared “Acme — Q4 roadmap.pptx” via Box with the whole workspace.',
+      title: 'Shared: “Flack — Q4 roadmap.pptx”',
+      body: 'Sarah Chen shared “Flack — Q4 roadmap.pptx” via Box with the whole workspace.',
       fields: [
         { label: 'Size', value: '8.7 MB · 24 slides' },
-        { label: 'Access', value: 'People in Acme Inc' },
+        { label: 'Access', value: 'People in Flack Inc' },
       ],
       actions: [{ label: 'Preview', style: 'primary' }],
     },
@@ -356,8 +356,8 @@ export const CONNECTOR_SAMPLES: Record<string, ConnectorEventInstance[]> = {
   notion: [
     {
       eventId: 'page_shared',
-      title: 'Shared with you: “Acme — Engineering wiki”',
-      body: 'Priya Patel shared the Notion page “Acme — Engineering wiki” with the workspace.',
+      title: 'Shared with you: “Flack — Engineering wiki”',
+      body: 'Priya Patel shared the Notion page “Flack — Engineering wiki” with the workspace.',
       fields: [
         { label: 'Type', value: 'Wiki · 14 sub-pages' },
         { label: 'Access', value: 'Can comment' },
@@ -401,7 +401,7 @@ export const CONNECTOR_SAMPLES: Record<string, ConnectorEventInstance[]> = {
     {
       eventId: 'ticket_created',
       title: 'Ticket #8841: “Slack import stuck at 40%”',
-      body: 'New ticket #8841 “Slack import stuck at 40%” (Normal · Acme Inc) from helpdesk form.',
+      body: 'New ticket #8841 “Slack import stuck at 40%” (Normal · Flack Inc) from helpdesk form.',
       fields: [
         { label: 'Requester', value: 'dana@globex.test' },
         { label: 'Priority', value: 'Normal' },
@@ -553,7 +553,7 @@ export const CONNECTORS: ConnectorDef[] = [
     icon: 'calendar',
     color: '#1a73e8',
     scopes: ['Read calendar events', 'Read event guests', 'Manage event reminders'],
-    sampleAccounts: ['sarah@acme.test', 'acme-team@acme.test'],
+    sampleAccounts: ['sarah@flack.test', 'flack-team@flack.test'],
     events: [
       { id: 'meeting_reminder', label: 'Meeting reminders', description: 'Post 15 minutes before a meeting starts', defaultOn: true },
       { id: 'event_created', label: 'New events', description: 'When someone schedules a new event', defaultOn: true },
@@ -571,7 +571,7 @@ export const CONNECTORS: ConnectorDef[] = [
     icon: 'hard-drive',
     color: '#0f9d58',
     scopes: ['Read files shared with you', 'Read comments', 'View file metadata'],
-    sampleAccounts: ['sarah@acme.test', 'Acme Inc shared drive'],
+    sampleAccounts: ['sarah@flack.test', 'Flack Inc shared drive'],
     events: [
       { id: 'file_shared', label: 'Files shared', description: 'When a file is shared with the team', defaultOn: true },
       { id: 'comment_added', label: 'Comments', description: 'New comments on shared files', defaultOn: true },
@@ -588,7 +588,7 @@ export const CONNECTORS: ConnectorDef[] = [
     icon: 'github',
     color: '#24292f',
     scopes: ['Read repositories', 'Read pull requests', 'Read commit statuses', 'Read issues'],
-    sampleAccounts: ['acme-inc', 'marcus-reid'],
+    sampleAccounts: ['flack-inc', 'marcus-reid'],
     events: [
       { id: 'pr_opened', label: 'Pull requests', description: 'Opened PRs and review requests', defaultOn: true },
       { id: 'push', label: 'Pushes', description: 'New commits pushed to tracked branches', defaultOn: true },
@@ -606,7 +606,7 @@ export const CONNECTORS: ConnectorDef[] = [
     icon: 'bug',
     color: '#0052cc',
     scopes: ['Read issues', 'Read sprints', 'Read projects'],
-    sampleAccounts: ['acme.atlassian.net'],
+    sampleAccounts: ['flack.atlassian.net'],
     events: [
       { id: 'issue_created', label: 'New issues', description: 'Issues created in tracked projects', defaultOn: true },
       { id: 'status_changed', label: 'Status changes', description: 'When issues move between columns', defaultOn: true },
@@ -623,7 +623,7 @@ export const CONNECTORS: ConnectorDef[] = [
     icon: 'video',
     color: '#2d8cff',
     scopes: ['Read meetings', 'Read recordings', 'View meeting participants'],
-    sampleAccounts: ['sarah@acme.test', 'Acme Inc account'],
+    sampleAccounts: ['sarah@flack.test', 'Flack Inc account'],
     events: [
       { id: 'meeting_started', label: 'Meetings started', description: 'Post with a Join button when a meeting begins', defaultOn: true },
       { id: 'recording_ready', label: 'Recordings', description: 'Cloud recordings when they’re ready', defaultOn: true },
@@ -639,7 +639,7 @@ export const CONNECTORS: ConnectorDef[] = [
     icon: 'film',
     color: '#625df5',
     scopes: ['Read shared videos', 'Read video metadata'],
-    sampleAccounts: ['marcus@acme.test', 'Acme Inc workspace'],
+    sampleAccounts: ['marcus@flack.test', 'Flack Inc workspace'],
     events: [{ id: 'video_shared', label: 'Videos shared', description: 'When someone shares a Loom with the workspace', defaultOn: true }],
   },
   {
@@ -652,7 +652,7 @@ export const CONNECTORS: ConnectorDef[] = [
     icon: 'trello',
     color: '#0079bf',
     scopes: ['Read boards', 'Read cards', 'Read members'],
-    sampleAccounts: ['acme-design', 'sarah@acme.test'],
+    sampleAccounts: ['flack-design', 'sarah@flack.test'],
     events: [
       { id: 'card_moved', label: 'Card moves', description: 'When cards change lists', defaultOn: true },
       { id: 'card_assigned', label: 'Assignments', description: 'When you’re assigned a card', defaultOn: true },
@@ -669,7 +669,7 @@ export const CONNECTORS: ConnectorDef[] = [
     icon: 'clipboard',
     color: '#f06a52',
     scopes: ['Read tasks', 'Read projects', 'Read portfolios'],
-    sampleAccounts: ['acme.inc', 'tom@acme.test'],
+    sampleAccounts: ['flack.inc', 'tom@flack.test'],
     events: [
       { id: 'task_assigned', label: 'Task assignments', description: 'When you’re assigned a task', defaultOn: true },
       { id: 'task_completed', label: 'Completions', description: 'When tasks are marked complete', defaultOn: true },
@@ -685,7 +685,7 @@ export const CONNECTORS: ConnectorDef[] = [
     icon: 'notebook',
     color: '#181818',
     scopes: ['Read shared pages', 'Read comments', 'Read databases'],
-    sampleAccounts: ['Acme Inc workspace', 'priya@acme.test'],
+    sampleAccounts: ['Flack Inc workspace', 'priya@flack.test'],
     events: [
       { id: 'page_shared', label: 'Pages shared', description: 'Pages shared with the workspace', defaultOn: true },
       { id: 'comment_added', label: 'Mentions & comments', description: 'When you’re mentioned in a comment', defaultOn: true },
@@ -702,7 +702,7 @@ export const CONNECTORS: ConnectorDef[] = [
     icon: 'table',
     color: '#fcb400',
     scopes: ['Read bases', 'Read records', 'Read views'],
-    sampleAccounts: ['Acme Inc bases'],
+    sampleAccounts: ['Flack Inc bases'],
     events: [
       { id: 'record_assigned', label: 'Record assignments', description: 'When you’re assigned a record', defaultOn: true },
       { id: 'view_created', label: 'New views', description: 'Views created in tracked bases', defaultOn: false },
@@ -718,7 +718,7 @@ export const CONNECTORS: ConnectorDef[] = [
     icon: 'cloud',
     color: '#00a1e0',
     scopes: ['Read leads', 'Read opportunities', 'Read cases'],
-    sampleAccounts: ['Acme Inc (production)', 'sandbox'],
+    sampleAccounts: ['Flack Inc (production)', 'sandbox'],
     events: [
       { id: 'lead_created', label: 'New leads', description: 'Leads created in Salesforce', defaultOn: true },
       { id: 'deal_won', label: 'Won deals', description: 'Opportunities marked closed-won', defaultOn: true },
@@ -735,7 +735,7 @@ export const CONNECTORS: ConnectorDef[] = [
     icon: 'gauge',
     color: '#ff7a59',
     scopes: ['Read forms', 'Read deals', 'Read contacts'],
-    sampleAccounts: ['Acme Inc portal'],
+    sampleAccounts: ['Flack Inc portal'],
     events: [
       { id: 'form_submission', label: 'Form submissions', description: 'New submissions on tracked forms', defaultOn: true },
       { id: 'deal_stage_changed', label: 'Deal stage changes', description: 'When deals move stages', defaultOn: true },
@@ -751,7 +751,7 @@ export const CONNECTORS: ConnectorDef[] = [
     icon: 'lifebuoy',
     color: '#03363d',
     scopes: ['Read tickets', 'Read satisfaction ratings', 'Read SLA policies'],
-    sampleAccounts: ['acme.zendesk.com'],
+    sampleAccounts: ['flack.zendesk.com'],
     events: [
       { id: 'ticket_created', label: 'New tickets', description: 'Tickets created in tracked views', defaultOn: true },
       { id: 'ticket_escalated', label: 'Escalations', description: 'Priority raised or SLA at risk', defaultOn: true },
@@ -768,7 +768,7 @@ export const CONNECTORS: ConnectorDef[] = [
     icon: 'dropbox',
     color: '#0061ff',
     scopes: ['Read shared files', 'Read folders', 'View file metadata'],
-    sampleAccounts: ['Acme Inc team', 'marcus@acme.test'],
+    sampleAccounts: ['Flack Inc team', 'marcus@flack.test'],
     events: [
       { id: 'file_shared', label: 'Files shared', description: 'Files shared with the team', defaultOn: true },
       { id: 'folder_updated', label: 'Folder updates', description: 'Files added to shared folders', defaultOn: true },
@@ -784,7 +784,7 @@ export const CONNECTORS: ConnectorDef[] = [
     icon: 'box',
     color: '#0061d5',
     scopes: ['Read shared files', 'Read collaborations', 'View file metadata'],
-    sampleAccounts: ['Acme Inc enterprise'],
+    sampleAccounts: ['Flack Inc enterprise'],
     events: [
       { id: 'file_shared', label: 'Files shared', description: 'Files shared with you or the team', defaultOn: true },
       { id: 'collaborator_added', label: 'New collaborators', description: 'Collaborators added to shared folders', defaultOn: false },
@@ -800,7 +800,7 @@ export const CONNECTORS: ConnectorDef[] = [
     icon: 'pen-tool',
     color: '#a259ff',
     scopes: ['Read files', 'Read comments', 'Read prototypes'],
-    sampleAccounts: ['Acme Inc team', 'emma@acme.test'],
+    sampleAccounts: ['Flack Inc team', 'emma@flack.test'],
     events: [
       { id: 'file_comment', label: 'File comments', description: 'New comments on tracked files', defaultOn: true },
       { id: 'prototype_shared', label: 'Prototype shares', description: 'Prototypes shared for review', defaultOn: true },
@@ -816,7 +816,7 @@ export const CONNECTORS: ConnectorDef[] = [
     icon: 'presentation',
     color: '#ffdd00',
     scopes: ['Read boards', 'Read comments'],
-    sampleAccounts: ['Acme Inc team'],
+    sampleAccounts: ['Flack Inc team'],
     events: [
       { id: 'board_shared', label: 'Boards shared', description: 'Boards shared with the team', defaultOn: true },
       { id: 'comment_added', label: 'Comments', description: 'New comments on shared boards', defaultOn: false },
@@ -832,7 +832,7 @@ export const CONNECTORS: ConnectorDef[] = [
     icon: 'palette',
     color: '#00c4cc',
     scopes: ['Read designs', 'Read comments'],
-    sampleAccounts: ['Acme Inc team', 'nina@acme.test'],
+    sampleAccounts: ['Flack Inc team', 'nina@flack.test'],
     events: [
       { id: 'design_shared', label: 'Designs shared', description: 'Designs shared with the team', defaultOn: true },
       { id: 'comment_added', label: 'Comments', description: 'New comments on shared designs', defaultOn: false },
@@ -848,7 +848,7 @@ export const CONNECTORS: ConnectorDef[] = [
     icon: 'calendar-days',
     color: '#0f6cbd',
     scopes: ['Read calendar events', 'Read event attendees', 'Send reminders'],
-    sampleAccounts: ['emma@acme.test', 'Acme Inc tenant'],
+    sampleAccounts: ['emma@flack.test', 'Flack Inc tenant'],
     events: [
       { id: 'meeting_invite', label: 'Meeting invites', description: 'New invitations with Accept / Decline', defaultOn: true },
       { id: 'event_reminder', label: 'Event reminders', description: 'Reminders before events start', defaultOn: true },
@@ -864,7 +864,7 @@ export const CONNECTORS: ConnectorDef[] = [
     icon: 'zap',
     color: '#ff4a00',
     scopes: ['Read zaps', 'Read task history'],
-    sampleAccounts: ['Acme Inc workspace'],
+    sampleAccounts: ['Flack Inc workspace'],
     events: [
       { id: 'zap_completed', label: 'Zap completions', description: 'Successful runs of tracked zaps', defaultOn: true },
       { id: 'zap_error', label: 'Zap errors', description: 'Failed runs that need attention', defaultOn: true },
@@ -893,7 +893,7 @@ export function pickEventInstance(def: ConnectorDef, eventId?: string): Connecto
 
 /** Find or create the connector's bot "app" user for this org. */
 export async function ensureAppUser(orgId: string, def: ConnectorDef): Promise<User> {
-  const email = `${def.id}@apps.acme.test`
+  const email = `${def.id}@apps.flack.test`
   const existing = await db.user.findFirst({ where: { orgId, email } })
   if (existing) return existing
   return db.user.create({

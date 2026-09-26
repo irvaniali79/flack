@@ -1,4 +1,4 @@
-// MCP tool implementations for the Acme Chat MCP server.
+// MCP tool implementations for the Flack Chat MCP server.
 // Every tool runs with the identity of the authenticated key owner (or the
 // signed-in playground user) — agents and humans share the same API surface.
 import { db } from '@/lib/db'

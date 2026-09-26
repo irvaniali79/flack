@@ -322,14 +322,14 @@ export function SecurityTab() {
   const downloadRecoveryCodes = () => {
     if (!recoveryCodes) return
     const text =
-      'Acme Chat — recovery codes\n' +
+      'Flack Chat — recovery codes\n' +
       'Each code works exactly once. Store them somewhere safe.\n\n' +
       recoveryCodes.map((c, i) => `${String(i + 1).padStart(2, ' ')}. ${c}`).join('\n') +
       '\n'
     const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }))
     const anchor = document.createElement('a')
     anchor.href = url
-    anchor.download = 'acme-chat-recovery-codes.txt'
+    anchor.download = 'flack-chat-recovery-codes.txt'
     anchor.click()
     URL.revokeObjectURL(url)
   }
@@ -454,7 +454,7 @@ export function SecurityTab() {
                   className={cn(!revealed && 'select-none blur-[5px]')}
                   aria-label={revealed ? recoveryCode : 'hidden recovery code'}
                 >
-                  {revealed ? recoveryCode : 'acme-xxxx-xxxx'}
+                  {revealed ? recoveryCode : 'flack-xxxx-xxxx'}
                 </span>
                 {revealed && (
                   <button
@@ -517,7 +517,7 @@ export function SecurityTab() {
           <Label htmlFor="disable-code">Authenticator or recovery code</Label>
           <Input
             id="disable-code"
-            placeholder="123456 or acme-xxxx-xxxx"
+            placeholder="123456 or flack-xxxx-xxxx"
             value={secretInput}
             onChange={(event) => setSecretInput(event.target.value.trim())}
             className="rounded-lg font-mono"
@@ -712,7 +712,7 @@ export function SecurityTab() {
       <div className="rounded-xl bg-muted/50 p-3.5 text-xs leading-relaxed text-muted-foreground">
         <p className="font-semibold text-foreground">How it works</p>
         <p className="mt-1">
-          Acme Chat implements the TOTP standard (RFC 6238) — the same one your bank uses. The
+          Flack Chat implements the TOTP standard (RFC 6238) — the same one your bank uses. The
           secret never leaves your account un-encrypted, codes are only valid for 30 seconds, and
           8 one-time recovery codes keep you from being locked out.
         </p>

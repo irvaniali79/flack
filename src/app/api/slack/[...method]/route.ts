@@ -1,12 +1,12 @@
 // Slack Web API compatibility endpoint — POST/GET /api/slack/<method>.
 //
 //   curl -X POST http://<host>/api/slack/chat.postMessage \
-//     -H "Authorization: Bearer acme_…" \
+//     -H "Authorization: Bearer flack_…" \
 //     -H "Content-Type: application/json" \
 //     -d '{"channel":"general","text":"hello from my Slack bot"}'
 //
 // Point existing Slack bots here by overriding their API base URL
-// (SLACK_API_URL for @slack/bolt & python slack_sdk) and using an Acme API
+// (SLACK_API_URL for @slack/bolt & python slack_sdk) and using an Flack API
 // key in place of the xoxb- token. Responses use Slack's envelope: HTTP 200
 // with { ok: true, … } or { ok: false, error }.
 import { db } from '@/lib/db'
@@ -47,7 +47,7 @@ const MUTATING = new Set([
 ])
 
 // Slack methods we deliberately don't implement (ephemeral/interactive
-// surfaces with no Acme equivalent) — reported distinctly from typos.
+// surfaces with no Flack equivalent) — reported distinctly from typos.
 const NOT_IMPLEMENTED = new Set([
   'chat.postEphemeral',
   'chat.scheduleMessage',
@@ -71,7 +71,7 @@ const NOT_IMPLEMENTED = new Set([
 
 function slackJson(body: Record<string, unknown>): Response {
   return Response.json(body, {
-    headers: { 'cache-control': 'no-store', 'x-acme-slack-compat': '1' },
+    headers: { 'cache-control': 'no-store', 'x-flack-slack-compat': '1' },
   })
 }
 
@@ -115,7 +115,7 @@ async function parseParams(request: Request): Promise<Record<string, string>> {
   return params
 }
 
-// ─── Auth: Bearer acme_… / token param → API key, else session cookie ────────
+// ─── Auth: Bearer flack_… / token param → API key, else session cookie ────────
 
 async function resolveCtx(
   request: Request,
@@ -131,10 +131,10 @@ async function resolveCtx(
 
   if (rawToken) {
     const token = normalizeSlackToken(rawToken)
-    if (!token.startsWith('acme_')) {
+    if (!token.startsWith('flack_')) {
       return {
         ok: false,
-        response: fail('invalid_auth', 'expected an acme_… API key (create one under Integrations)'),
+        response: fail('invalid_auth', 'expected an flack_… API key (create one under Integrations)'),
       }
     }
     const record = await db.apiKey.findUnique({
@@ -169,7 +169,7 @@ async function resolveCtx(
   // Session-cookie auth (in-app "try it" flows)
   const sessionUser = await getSessionUser()
   if (!sessionUser) {
-    return { ok: false, response: fail('not_authed', 'send Authorization: Bearer acme_… or a token param') }
+    return { ok: false, response: fail('not_authed', 'send Authorization: Bearer flack_… or a token param') }
   }
   const org = await db.org.findUnique({ where: { id: sessionUser.orgId } })
   if (!org) return { ok: false, response: fail('invalid_auth') }
@@ -229,7 +229,7 @@ async function handleSlack(request: Request, { params }: RouteParams): Promise<R
   const impl = METHODS[method]
   if (!impl) {
     if (NOT_IMPLEMENTED.has(method)) {
-      return fail('not_implemented', `${method} has no Acme equivalent — see supported methods in Integrations`)
+      return fail('not_implemented', `${method} has no Flack equivalent — see supported methods in Integrations`)
     }
     return fail('unknown_method', `supported: ${SUPPORTED_SLACK_METHODS.join(', ')}`)
   }

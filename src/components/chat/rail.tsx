@@ -70,7 +70,7 @@ export function Rail() {
           `text-foreground` pins inherited text to the scoped dark token set (see sidebar.tsx) */}
       <div className="dark flex h-full w-14 shrink-0 flex-col items-center gap-1 border-r border-border bg-accent-surface-2 py-3 text-foreground">
         {/* NOTE: the workspace identity lives ONLY in the sidebar org header —
-            no duplicate block here (user-requested single Acme Inc identity). */}
+            no duplicate block here (user-requested single Flack Inc identity). */}
         <Tooltip>
           <TooltipTrigger asChild>
             <button

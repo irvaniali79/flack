@@ -2,7 +2,7 @@ import { cookies } from 'next/headers'
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto'
 import { db } from '@/lib/db'
 
-export const SESSION_COOKIE = 'acme_session'
+export const SESSION_COOKIE = 'flack_session'
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
 
 // ─── Password hashing (scrypt, no native deps) ───────────────────────────────

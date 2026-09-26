@@ -11,10 +11,10 @@ const db = new PrismaClient()
 const M = (minutesAgo: number) => new Date(Date.now() - minutesAgo * 60_000)
 
 async function main() {
-  const org = await db.org.findFirst({ where: { slug: 'acme' } })
-  if (!org) throw new Error('Org "acme" not found — run the main seed first')
-  const sarah = await db.user.findFirst({ where: { email: 'sarah@acme.test' } })
-  const marcus = await db.user.findFirst({ where: { email: 'marcus@acme.test' } })
+  const org = await db.org.findFirst({ where: { slug: 'flack' } })
+  if (!org) throw new Error('Org "flack" not found — run the main seed first')
+  const sarah = await db.user.findFirst({ where: { email: 'sarah@flack.test' } })
+  const marcus = await db.user.findFirst({ where: { email: 'marcus@flack.test' } })
   if (!sarah || !marcus) throw new Error('Seed users not found — run the main seed first')
 
   const channel = async (slug: string) => {
@@ -28,7 +28,7 @@ async function main() {
 
   /** find-or-create a connector bot "app" user */
   const ensureAppUser = async (id: string, name: string, category: string, color: string) => {
-    const email = `${id}@apps.acme.test`
+    const email = `${id}@apps.flack.test`
     const existing = await db.user.findFirst({ where: { orgId: org.id, email } })
     if (existing) return existing
     return db.user.create({
@@ -92,7 +92,7 @@ async function main() {
   // ── 1. Google Calendar → #general (Sarah) ─────────────────────────────────
   const gcalConn = await connect({
     connectorId: 'google-calendar',
-    accountLabel: 'sarah@acme.test',
+    accountLabel: 'sarah@flack.test',
     channelId: general.id,
     appUserId: gcalApp.id,
     connectedById: sarah.id,
@@ -103,7 +103,7 @@ async function main() {
   // ── 2. GitHub → #engineering (Marcus) ──────────────────────────────────────
   const githubConn = await connect({
     connectorId: 'github',
-    accountLabel: 'acme-inc',
+    accountLabel: 'flack-inc',
     channelId: engineering.id,
     appUserId: githubApp.id,
     connectedById: marcus.id,
@@ -114,7 +114,7 @@ async function main() {
   // ── 3. Google Drive → #design (Sarah) ─────────────────────────────────────
   await connect({
     connectorId: 'google-drive',
-    accountLabel: 'sarah@acme.test',
+    accountLabel: 'sarah@flack.test',
     channelId: design.id,
     appUserId: gdriveApp.id,
     connectedById: sarah.id,
@@ -219,7 +219,7 @@ async function main() {
           actorId: sarah.id,
           action: 'connector.connected',
           target: 'Google Calendar',
-          meta: JSON.stringify({ connectorId: 'google-calendar', accountLabel: 'sarah@acme.test' }),
+          meta: JSON.stringify({ connectorId: 'google-calendar', accountLabel: 'sarah@flack.test' }),
           createdAt: M(2880),
         },
         {
@@ -227,7 +227,7 @@ async function main() {
           actorId: marcus.id,
           action: 'connector.connected',
           target: 'GitHub',
-          meta: JSON.stringify({ connectorId: 'github', accountLabel: 'acme-inc' }),
+          meta: JSON.stringify({ connectorId: 'github', accountLabel: 'flack-inc' }),
           createdAt: M(2820),
         },
         {
@@ -235,7 +235,7 @@ async function main() {
           actorId: sarah.id,
           action: 'connector.connected',
           target: 'Google Drive',
-          meta: JSON.stringify({ connectorId: 'google-drive', accountLabel: 'sarah@acme.test' }),
+          meta: JSON.stringify({ connectorId: 'google-drive', accountLabel: 'sarah@flack.test' }),
           createdAt: M(2760),
         },
       ],

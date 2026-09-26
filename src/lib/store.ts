@@ -20,10 +20,10 @@ import {
   socketLeaveChannel,
 } from './socket'
 
-const DRAFT_KEY = 'acme-drafts'
-const SAVED_KEY = 'acme-saved-messages'
-const ACCENT_KEY = 'acme-accent'
-const FONT_SIZE_KEY = 'acme-font-size'
+const DRAFT_KEY = 'flack-drafts'
+const SAVED_KEY = 'flack-saved-messages'
+const ACCENT_KEY = 'flack-accent'
+const FONT_SIZE_KEY = 'flack-font-size'
 
 // Guards against a stale PATCH response clobbering a newer optimistic switch.
 let accentRequestSeq = 0
@@ -299,7 +299,7 @@ function touchChannel(channels: ChannelDTO[], channelId: string, message: Messag
 
 export const useChatStore = create<ChatState>((set, get) => ({
   me: null,
-  orgName: 'Acme',
+  orgName: 'Flack',
   users: [],
   channels: [],
   agents: [],

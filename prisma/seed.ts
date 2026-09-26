@@ -38,7 +38,7 @@ async function main() {
 
   // ── org ────────────────────────────────────────────────────────────────────
   const org = await db.org.create({
-    data: { name: 'Acme Inc', slug: 'acme', plan: 'team' },
+    data: { name: 'Flack Inc', slug: 'flack', plan: 'team' },
   })
 
   // ── humans ─────────────────────────────────────────────────────────────────
@@ -46,7 +46,7 @@ async function main() {
     db.user.create({ data: { ...data, orgId: org.id, passwordHash: hash(DEMO_PASSWORD) } as any })
 
   const sarah = await mkUser({
-    email: 'sarah@acme.test',
+    email: 'sarah@flack.test',
     name: 'Sarah Chen',
     title: 'Product Lead',
     role: 'owner',
@@ -56,7 +56,7 @@ async function main() {
     statusText: 'Heads down on v1 launch',
   })
   const marcus = await mkUser({
-    email: 'marcus@acme.test',
+    email: 'marcus@flack.test',
     name: 'Marcus Johnson',
     title: 'Engineering Manager',
     role: 'admin',
@@ -65,14 +65,14 @@ async function main() {
     statusText: 'Brewing ideas',
   })
   const priya = await mkUser({
-    email: 'priya@acme.test',
+    email: 'priya@flack.test',
     name: 'Priya Patel',
     title: 'Senior Engineer',
     role: 'member',
     avatarColor: '#059669',
   })
   const diego = await mkUser({
-    email: 'diego@acme.test',
+    email: 'diego@flack.test',
     name: 'Diego Ramirez',
     title: 'Product Designer',
     role: 'member',
@@ -81,14 +81,14 @@ async function main() {
     statusText: 'Figma deep-dive',
   })
   const emma = await mkUser({
-    email: 'emma@acme.test',
+    email: 'emma@flack.test',
     name: 'Emma Wilson',
     title: 'Marketing Lead',
     role: 'member',
     avatarColor: '#db2777',
   })
   const tom = await mkUser({
-    email: 'tom@acme.test',
+    email: 'tom@flack.test',
     name: 'Tom Okafor',
     title: 'Account Executive',
     role: 'member',
@@ -97,14 +97,14 @@ async function main() {
 
   // ── agents (as first-class users) ──────────────────────────────────────────
   const ariaUser = await mkUser({
-    email: 'aria@acme.test',
+    email: 'aria@flack.test',
     name: 'Aria',
     title: 'AI Team Assistant',
     kind: 'agent',
     avatarColor: '#c026d3',
   })
   const reviewerUser = await mkUser({
-    email: 'reviewer@acme.test',
+    email: 'reviewer@flack.test',
     name: 'CodeReviewer',
     title: 'AI Code Review Agent',
     kind: 'agent',
@@ -118,7 +118,7 @@ async function main() {
       handle: 'aria',
       description: 'Friendly team assistant — answers questions, summarizes threads, drafts content.',
       systemPrompt:
-        'You are Aria, the AI team assistant for Acme Inc. You live in the team chat. ' +
+        'You are Aria, the AI team assistant for Flack Inc. You live in the team chat. ' +
         'Be helpful, warm and concise (under 120 words unless asked for more). ' +
         'Use Markdown formatting when useful. If you do not know something, say so honestly.',
       chatable: true,
@@ -134,7 +134,7 @@ async function main() {
       handle: 'reviewer',
       description: 'Reviews pasted code for bugs, style and security issues.',
       systemPrompt:
-        'You are CodeReviewer, an expert code review agent for Acme Inc. When shown code, ' +
+        'You are CodeReviewer, an expert code review agent for Flack Inc. When shown code, ' +
         'review it: bugs first, then security, then style. Be specific and reference line content. ' +
         'Keep reviews tight — max ~150 words plus code snippets.',
       chatable: true,

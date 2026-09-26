@@ -87,9 +87,9 @@ export function EmailNotifSection() {
       await api('/api/me/outbox', {
         method: 'POST',
         body: {
-          subject: 'Acme Chat — test email',
+          subject: 'Flack Chat — test email',
           body:
-            'This is a test email from Acme Chat.\n\nIf you can read this in your outbox, the mail adapter is doing its job — in production this arrives via SMTP instead.',
+            'This is a test email from Flack Chat.\n\nIf you can read this in your outbox, the mail adapter is doing its job — in production this arrives via SMTP instead.',
         },
       })
       await fetchOutbox()
@@ -110,7 +110,7 @@ export function EmailNotifSection() {
         <Label>Email notifications</Label>
       </div>
       <p className="text-xs leading-relaxed text-muted-foreground">
-        Acme Chat sends at most one email per quiet-hours period — never per message. The
+        Flack Chat sends at most one email per quiet-hours period — never per message. The
         digest bundles everything that arrived while your notifications were paused.
       </p>
 

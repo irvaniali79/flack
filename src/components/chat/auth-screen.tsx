@@ -96,7 +96,7 @@ export function AuthScreen() {
       } else {
         await register(email, name, password)
       }
-      toast.success('Welcome to Acme Chat 👋')
+      toast.success('Welcome to Flack Chat 👋')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {
@@ -111,7 +111,7 @@ export function AuthScreen() {
     setBusy(true)
     try {
       await verify2fa(challenge.challengeId, code.trim())
-      toast.success('Welcome to Acme Chat 👋')
+      toast.success('Welcome to Flack Chat 👋')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'That code did not work')
       // Wrong code consumed the challenge — restart from the password step
@@ -173,8 +173,8 @@ export function AuthScreen() {
               A
             </div>
             <div>
-              <p className="text-sm font-bold tracking-tight">Acme Chat</p>
-              <p className="text-xs text-zinc-400">Acme Inc</p>
+              <p className="text-sm font-bold tracking-tight">Flack Chat</p>
+              <p className="text-xs text-zinc-400">Flack Inc</p>
             </div>
           </div>
 
@@ -281,7 +281,7 @@ export function AuthScreen() {
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-600 font-black text-white">
                 A
               </div>
-              <p className="font-bold">Acme Chat</p>
+              <p className="font-bold">Flack Chat</p>
             </div>
           </div>
 
@@ -310,7 +310,7 @@ export function AuthScreen() {
                     autoFocus
                     inputMode={recoveryMode ? 'text' : 'numeric'}
                     autoComplete="one-time-code"
-                    placeholder={recoveryMode ? 'acme-xxxx-xxxx' : '••••••'}
+                    placeholder={recoveryMode ? 'flack-xxxx-xxxx' : '••••••'}
                     value={code}
                     onChange={(event) => setCode(event.target.value)}
                     required
@@ -416,7 +416,7 @@ export function AuthScreen() {
                       id="email"
                       type="email"
                       autoComplete="email"
-                      placeholder="you@acme.test"
+                      placeholder="you@flack.test"
                       value={email}
                       onChange={(event) => setEmail(event.target.value)}
                       required

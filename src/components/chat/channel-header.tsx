@@ -302,7 +302,7 @@ export function ChannelHeader() {
         >
           <Menu className="h-5 w-5" aria-hidden />
         </Button>
-        <span className="ml-2 font-semibold">Acme Chat</span>
+        <span className="ml-2 font-semibold">Flack Chat</span>
       </header>
     )
   }

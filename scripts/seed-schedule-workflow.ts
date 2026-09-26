@@ -8,8 +8,8 @@ const db = new PrismaClient()
 const WORKFLOW_NAME = 'Daily engineering pulse 💓'
 
 async function main() {
-  const sarah = await db.user.findUnique({ where: { email: 'sarah@acme.test' } })
-  if (!sarah) throw new Error('sarah@acme.test not found')
+  const sarah = await db.user.findUnique({ where: { email: 'sarah@flack.test' } })
+  if (!sarah) throw new Error('sarah@flack.test not found')
   const engineering = await db.channel.findFirst({
     where: { orgId: sarah.orgId, slug: { startsWith: 'engineering' } },
   })

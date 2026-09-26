@@ -148,7 +148,7 @@ export function SlackImportSection() {
       const res = await fetch('/api/admin/slack-import/sample')
       if (!res.ok) throw new Error('Could not generate the sample export')
       const blob = await res.blob()
-      const file = new File([blob], 'acme-sample-slack-export.zip', { type: 'application/zip' })
+      const file = new File([blob], 'flack-sample-slack-export.zip', { type: 'application/zip' })
       await runImport(file, 'Importing sample export…')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sample import failed')

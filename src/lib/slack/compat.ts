@@ -1,9 +1,9 @@
 // Slack Web API compatibility layer.
 //
 // Lets existing Slack bots and integrations (@slack/bolt, python slack_sdk,
-// hubot, Zapier webhooks…) talk to an Acme Chat workspace by pointing
+// hubot, Zapier webhooks…) talk to an Flack Chat workspace by pointing
 // SLACK_API_URL at `<origin>/api/slack/` and swapping the xoxb- token for an
-// Acme API key (`acme_…`, created under Integrations).
+// Flack API key (`flack_…`, created under Integrations).
 //
 // Conventions mirrored from Slack:
 //   - Every response is HTTP 200 JSON with `{ ok: true, … }` or `{ ok: false, error }`.
@@ -33,15 +33,15 @@ export class SlackError extends Error {
 
 // ─── Token handling ──────────────────────────────────────────────────────────
 
-const ACME_PREFIX = 'acme_'
+const FLACK_PREFIX = 'flack_'
 const XO_TOKEN = /^xox[a-z]-(.+)$/i
 
-/** Normalizes a raw token: accepts `acme_…` directly, or `xoxb-acme_…` etc. */
+/** Normalizes a raw token: accepts `flack_…` directly, or `xoxb-flack_…` etc. */
 export function normalizeSlackToken(raw: string): string {
   const trimmed = raw.trim()
   const xo = XO_TOKEN.exec(trimmed)
   const candidate = xo ? xo[1] : trimmed
-  return candidate.startsWith(ACME_PREFIX) ? candidate : trimmed
+  return candidate.startsWith(FLACK_PREFIX) ? candidate : trimmed
 }
 
 // ─── mrkdwn → our markdown ───────────────────────────────────────────────────

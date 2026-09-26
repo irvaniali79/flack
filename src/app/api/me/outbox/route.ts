@@ -33,10 +33,10 @@ export async function POST(request: Request) {
     await sendMail({
       orgId: me.orgId,
       to: me.email,
-      subject: parsed.data.subject ?? 'Acme Chat — test email',
+      subject: parsed.data.subject ?? 'Flack Chat — test email',
       body:
         parsed.data.body ??
-        'This is a test email from Acme Chat.\n\nIf you can read this in your outbox, the mail adapter is doing its job — in production this arrives via SMTP instead.',
+        'This is a test email from Flack Chat.\n\nIf you can read this in your outbox, the mail adapter is doing its job — in production this arrives via SMTP instead.',
       kind: 'test',
     })
     return { ok: true }

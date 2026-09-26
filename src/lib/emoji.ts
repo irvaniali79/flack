@@ -225,7 +225,7 @@ export function searchEmojis(query: string, limit = 60): EmojiEntry[] {
     .map((s) => s.entry)
 }
 
-const RECENT_KEY = 'acme-recent-emojis'
+const RECENT_KEY = 'flack-recent-emojis'
 const RECENT_MAX = 24
 
 export function getRecentEmojis(): string[] {

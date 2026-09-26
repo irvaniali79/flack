@@ -1,7 +1,7 @@
 // GET /api/admin/slack-import/sample — generates a small but realistic Slack
 // workspace-export ZIP so the import flow can be tried end-to-end without a
 // real Slack workspace. Includes: 5 users (2 with emails that match existing
-// Acme accounts → email matching demo; 2 brand-new; 1 bot), 2 channels with
+// Flack accounts → email matching demo; 2 brand-new; 1 bot), 2 channels with
 // mrkdwn, mentions, a thread, reactions, pinned + subtype + deleted noise.
 import { zipSync, strToU8 } from 'fflate'
 
@@ -28,9 +28,9 @@ export async function GET() {
       is_bot: false,
       profile: { email: 'dev.tom@import.test', real_name: 'Tom Nguyen', display_name: 'tom', title: 'Imported backend dev' },
     },
-    // These two match existing Acme users by email → "matched" on import
-    { id: 'U902', name: 'priya', deleted: false, is_bot: false, profile: { email: 'priya@acme.test', real_name: 'Priya Patel', display_name: 'priya' } },
-    { id: 'U903', name: 'sarah', deleted: false, is_bot: false, profile: { email: 'sarah@acme.test', real_name: 'Sarah Chen', display_name: 'sarah' } },
+    // These two match existing Flack users by email → "matched" on import
+    { id: 'U902', name: 'priya', deleted: false, is_bot: false, profile: { email: 'priya@flack.test', real_name: 'Priya Patel', display_name: 'priya' } },
+    { id: 'U903', name: 'sarah', deleted: false, is_bot: false, profile: { email: 'sarah@flack.test', real_name: 'Sarah Chen', display_name: 'sarah' } },
     // A bot — imports as "(Slack bot)" user so attribution survives
     { id: 'B950', name: 'standup-bot', deleted: false, is_bot: true, profile: { real_name: 'standup-bot', display_name: 'standup-bot' } },
     // Deleted account — messages render as "Unknown", no user created
@@ -99,7 +99,7 @@ export async function GET() {
     status: 200,
     headers: {
       'Content-Type': 'application/zip',
-      'Content-Disposition': 'attachment; filename="acme-sample-slack-export.zip"',
+      'Content-Disposition': 'attachment; filename="flack-sample-slack-export.zip"',
       'Content-Length': String(zip.length),
     },
   })

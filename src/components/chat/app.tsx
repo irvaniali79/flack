@@ -37,7 +37,7 @@ function Splash() {
         A
       </div>
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Loading Acme Chat…
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Loading Flack Chat…
       </div>
     </div>
   )

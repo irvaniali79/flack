@@ -70,7 +70,7 @@ export function reportToMarkdown(report: CutoverReport): string {
   const pct = (n: number) => (n === 0 ? '—' : `${n}`)
   const lines: string[] = []
 
-  lines.push(`# Cutover validation report — ${report.totals.importedChannels > 0 ? 'Acme Chat' : 'Acme Chat (no imports yet)'}`)
+  lines.push(`# Cutover validation report — ${report.totals.importedChannels > 0 ? 'Flack Chat' : 'Flack Chat (no imports yet)'}`)
   lines.push('')
   lines.push(`Generated: ${new Date(report.generatedAt).toUTCString()}`)
   lines.push(`Import runs found: ${report.importsFound}${report.lastImportAt ? ` · last at ${new Date(report.lastImportAt).toUTCString()}` : ''}`)
