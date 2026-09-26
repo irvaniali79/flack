@@ -63,6 +63,8 @@ model User {
   emailNotif   String   @default("off")
   // Accent color theme key (lib/theme-options.ts) — roams across devices
   accentTheme  String   @default("emerald")
+  // Per-user display font size / zoom multiplier (1 = 100%); applied as a UI zoom
+  fontSize     Float    @default(1)
   isActive     Boolean  @default(true)
   externalId   String?
   createdAt    DateTime @default(now())

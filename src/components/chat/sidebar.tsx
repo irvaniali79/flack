@@ -1028,7 +1028,7 @@ export function Sidebar({
         <button
           type="button"
           onClick={() => setProfileUserId(me.id)}
-          className="flex items-center gap-2.5 border-t border-border px-3 py-3 transition-colors duration-150 hover:bg-accent-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500/60"
+          className="flex items-center gap-2.5 rounded-xl border-t border-border px-3 py-3 transition-colors duration-150 hover:bg-accent-surface-hover focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-500/60"
           aria-label="Open my profile"
         >
           <UserAvatar user={me} size="sm" presence online />

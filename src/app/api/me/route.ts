@@ -34,6 +34,8 @@ const patchSchema = z.object({
   emailNotif: z.enum(['off', 'digest']).optional(),
   // Accent color theme key (validated against the catalog)
   accentTheme: z.string().refine((v) => (ACCENT_KEYS as string[]).includes(v), 'Unknown theme').optional(),
+  // Per-user display font size — zoom multiplier for the whole UI (80%–150%)
+  fontSize: z.number().min(0.8).max(1.5).optional(),
 })
 
 export async function PATCH(request: Request) {
@@ -59,7 +61,8 @@ export async function PATCH(request: Request) {
       'statusText' in data ||
       'avatarUrl' in data ||
       'bannerUrl' in data ||
-      'accentTheme' in data
+      'accentTheme' in data ||
+      'fontSize' in data
     ) {
       const orgUsers = await db.user.findMany({ where: { orgId: me.orgId }, select: { id: true } })
       const dto = serializeUser(updated)

@@ -5,13 +5,15 @@ import { cn } from '@/lib/utils'
 import type { UserDTO } from '@/lib/types'
 import { PresenceDot } from './presence-dot'
 
+// Profile pictures render as perfect circles everywhere (user request) —
+// focus rings around them inherit the shape, so they're always round too.
 const SIZES = {
-  xs: 'h-6 w-6 text-[10px] rounded-md',
-  sm: 'h-7 w-7 text-[11px] rounded-md',
-  md: 'h-9 w-9 text-xs rounded-lg',
-  lg: 'h-11 w-11 text-sm rounded-xl',
-  xl: 'h-16 w-16 text-xl rounded-2xl',
-  xxl: 'h-24 w-24 text-3xl rounded-3xl',
+  xs: 'h-6 w-6 text-[10px] rounded-full',
+  sm: 'h-7 w-7 text-[11px] rounded-full',
+  md: 'h-9 w-9 text-xs rounded-full',
+  lg: 'h-11 w-11 text-sm rounded-full',
+  xl: 'h-16 w-16 text-xl rounded-full',
+  xxl: 'h-24 w-24 text-3xl rounded-full',
 } as const
 
 export type AvatarSize = keyof typeof SIZES

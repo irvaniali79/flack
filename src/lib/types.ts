@@ -27,6 +27,8 @@ export interface UserDTO {
   timezone?: string
   /** Accent color theme key (lib/theme-options.ts) */
   accentTheme?: string
+  /** Per-user display font size / zoom multiplier (1 = 100%, range 0.8–1.5) */
+  fontSize?: number
 }
 
 export interface ReactionDTO {

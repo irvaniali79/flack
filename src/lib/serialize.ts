@@ -47,6 +47,7 @@ export function serializeUser(user: UserWithAgent): UserDTO {
     handle: user.agent?.handle,
     timezone: user.timezone,
     accentTheme: user.accentTheme ?? 'emerald',
+    fontSize: typeof user.fontSize === 'number' && user.fontSize >= 0.8 && user.fontSize <= 1.5 ? user.fontSize : 1,
   }
 }
 

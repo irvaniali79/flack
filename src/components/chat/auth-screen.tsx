@@ -479,7 +479,7 @@ export function AuthScreen() {
                       className="group flex items-center gap-3 rounded-xl border border-border bg-card p-2.5 text-left transition-all duration-150 hover:border-emerald-500/40 hover:bg-emerald-500/5 disabled:opacity-60"
                     >
                       <span
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-bold text-white"
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
                         style={{ backgroundColor: user.avatarColor }}
                         aria-hidden
                       >

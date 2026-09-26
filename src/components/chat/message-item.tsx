@@ -348,7 +348,7 @@ export const MessageItem = memo(function MessageItem({
             type="button"
             aria-label={`View ${sender.name}'s profile`}
             onClick={() => setProfileUserId(sender.id)}
-            className="flex rounded-full transition-transform duration-150 hover:scale-105 focus-visible:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+            className="flex rounded-full transition-transform duration-150 hover:scale-105 focus:scale-110 focus:outline-none focus:ring-2 focus:ring-emerald-500"
           >
             {connector ? (
               <ConnectorTile icon={connector.icon} color={connector.color} size="md" />
@@ -357,7 +357,7 @@ export const MessageItem = memo(function MessageItem({
             )}
           </button>
         ) : (
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-xs font-bold text-muted-foreground">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground">
             ?
           </div>
         )}

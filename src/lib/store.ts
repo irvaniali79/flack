@@ -23,9 +23,27 @@ import {
 const DRAFT_KEY = 'acme-drafts'
 const SAVED_KEY = 'acme-saved-messages'
 const ACCENT_KEY = 'acme-accent'
+const FONT_SIZE_KEY = 'acme-font-size'
 
 // Guards against a stale PATCH response clobbering a newer optimistic switch.
 let accentRequestSeq = 0
+
+/**
+ * Per-user display zoom (font size). Applied as a CSS `zoom` on <html> so the
+ * whole UI — text, spacing, icons — scales together, exactly like the
+ * browser's own zoom. Clamped to 0.8–1.5 and persisted to localStorage for
+ * the pre-paint script in layout.tsx (no size flash on reload).
+ */
+function applyFontSize(scale: number | null | undefined) {
+  const value =
+    typeof scale === 'number' && Number.isFinite(scale) ? Math.min(1.5, Math.max(0.8, scale)) : 1
+  try {
+    document.documentElement.style.zoom = String(value)
+    localStorage.setItem(FONT_SIZE_KEY, String(value))
+  } catch {
+    // storage unavailable — the zoom still applied above
+  }
+}
 
 /**
  * Apply an accent theme to <html data-accent='…'> and persist it for the
@@ -214,6 +232,7 @@ interface ChatState {
   refreshMe: () => Promise<void>
   /** Optimistically switch the accent color theme and persist it on the profile. */
   setAccentTheme: (key: string) => Promise<void>
+  setFontSize: (scale: number) => Promise<void>
   markNotificationsRead: (ids?: string[]) => Promise<void>
   snoozeNotification: (id: string, preset: { minutes?: number; until?: string }) => Promise<void>
   unsnoozeNotification: (id: string) => Promise<void>
@@ -338,6 +357,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       // Reconcile the pre-paint localStorage guess with the profile value
       // (server wins once you're logged in).
       applyAccentTheme(data.me.accentTheme)
+      applyFontSize(data.me.fontSize)
       const { me } = get()
       if (me) initSocket(me.id, me.name)
       // custom emoji power message rendering + the picker — fetch alongside
@@ -846,6 +866,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       users: s.users.map((u) => (u.id === user.id ? user : u)),
     }))
     applyAccentTheme(user.accentTheme)
+    applyFontSize(user.fontSize)
   },
 
   refreshMe: async () => {
@@ -856,6 +877,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         users: s.users.map((u) => (u.id === user.id ? user : u)),
       }))
       applyAccentTheme(user.accentTheme)
+      applyFontSize(user.fontSize)
     } catch {
       // ignore — keep the current snapshot
     }
@@ -888,6 +910,34 @@ export const useChatStore = create<ChatState>((set, get) => ({
         users: s.users.map((u) => (u.id === me.id ? { ...u, accentTheme: previous } : u)),
       }))
       toast.error(err instanceof Error ? err.message : 'Could not save accent theme')
+    }
+  },
+
+  setFontSize: async (scale) => {
+    const me = get().me
+    const next = Math.min(1.5, Math.max(0.8, scale))
+    if (!me || !Number.isFinite(next) || me.fontSize === next) return
+    const previous = me.fontSize ?? 1
+    // Optimistic — rescale immediately, then reconcile with the server.
+    applyFontSize(next)
+    set((s) => ({
+      me: s.me ? { ...s.me, fontSize: next } : s.me,
+      users: s.users.map((u) => (u.id === me.id ? { ...u, fontSize: next } : u)),
+    }))
+    try {
+      const user = await api<UserDTO>('/api/me', { method: 'PATCH', body: { fontSize: next } })
+      set((s) => ({
+        me: user,
+        users: s.users.map((u) => (u.id === user.id ? user : u)),
+      }))
+      applyFontSize(user.fontSize)
+    } catch (err) {
+      applyFontSize(previous)
+      set((s) => ({
+        me: s.me ? { ...s.me, fontSize: previous } : s.me,
+        users: s.users.map((u) => (u.id === me.id ? { ...u, fontSize: previous } : u)),
+      }))
+      toast.error(err instanceof Error ? err.message : 'Could not save font size')
     }
   },
 
@@ -1096,7 +1146,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
   handleUserUpdated: (user) => {
     set((s) => {
       const isMe = s.me?.id === user.id
-      if (isMe) applyAccentTheme(user.accentTheme)
+      if (isMe) {
+        applyAccentTheme(user.accentTheme)
+        applyFontSize(user.fontSize)
+      }
       return {
         users: s.users.some((u) => u.id === user.id)
           ? s.users.map((u) => (u.id === user.id ? user : u))

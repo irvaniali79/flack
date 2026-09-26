@@ -892,3 +892,20 @@ Stage Summary:
 - Login: sarah@acme.test / demo1234 (owner). QA via http://localhost:81. Demo state: dark + emerald.
 - Deliverable: /home/z/my-project/acme-chat-project-new.zip (root) + /acme-chat-project-new.zip download URL — both refreshed.
 - Next-phase candidates (carryover): connector slash-commands in composer, per-connector multi-channel routing, admin connector overview grid, emoji autocomplete in composer, accent theme quick-switcher in profile menu, "Remind me about this" follow-up on message context menu.
+
+---
+Task ID: 28
+Agent: main (Z.ai Code)
+Task: User request — "renew zipfile in /new-x.zip". Rebuild the fresh project archive under the new name new-x.zip and serve it at /new-x.zip.
+
+Work Log:
+- Built /home/z/my-project/new-x.zip (8,518,062 bytes) with the canonical exclusion set (node_modules, .next, skills, tool-results, download, dev.log, all root/public zips, mini-service node_modules) + .git appended in a second pass.
+- Copied to public/new-x.zip → served statically at /new-x.zip; verified HTTP 200 with full size on BOTH :3000 and the :81 gateway.
+- Verified: unzip -t INTEGRITY OK; 0 nested zip entries; archive contains the FRESH Task 27 files (composer.tsx 06:34 double-send guard, message-item.tsx 06:35 avatar ring + rounded rows, sidebar.tsx 06:35, globals.css 06:37 @layer base focus fix).
+- Git hygiene: all four zips (new-x.zip + acme-chat-project-new.zip, root + public copies) correctly gitignored — no history bloat.
+- Note: a user-pasted screenshot (pasted_image_1790407695471.png) failed to reach the filesystem this session (upload/ empty) — full QA sweep of main/hover/profile/threads/compact-rows/light/mobile was run instead; ALL CLEAN, 0 errors. User advised to hard-reload the preview (dev server + .next were restarted during Task 27, stale tabs would show old UI). Test messages from QA deleted; demo state dark + emerald restored.
+
+Stage Summary:
+- DELIVERABLE: /home/z/my-project/new-x.zip is the CURRENT canonical archive (fresh build with Tasks 0-27). Direct download URL: /new-x.zip (works on the preview origin and via gateway). Previous acme-chat-project-new.zip kept at root + public (same lineage, slightly older build).
+- Login: sarah@acme.test / demo1234 (owner). Demo state: dark + emerald.
+- Next-phase candidates (carryover): connector slash-commands in composer, per-connector multi-channel routing, admin connector overview grid, emoji autocomplete in composer, accent theme quick-switcher in profile menu.

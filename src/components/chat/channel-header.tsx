@@ -343,7 +343,7 @@ export function ChannelHeader() {
                 aria-label={`View ${user.name}'s profile`}
                 title={`View ${user.name}'s profile`}
                 onClick={() => setProfileUserId(user.id)}
-                className="rounded-full transition-transform duration-150 hover:scale-110 focus-visible:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                className="rounded-full transition-transform duration-150 hover:scale-110 focus:scale-110 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               >
                 <UserAvatar user={user} size="sm" className="ring-2 ring-background" />
               </button>
@@ -357,7 +357,7 @@ export function ChannelHeader() {
                   aria-label={`View ${dmOther.name}'s profile`}
                   title={`View ${dmOther.name}'s profile`}
                   onClick={() => setProfileUserId(dmOther.id)}
-                  className="truncate rounded-sm text-left text-[15px] font-bold leading-tight hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                  className="truncate rounded-md px-0.5 text-left text-[15px] font-bold leading-tight hover:underline focus:outline-none focus:ring-2 focus:ring-emerald-500/60"
                 >
                   {dmTitle}
                 </button>

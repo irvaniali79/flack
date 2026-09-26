@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useTheme } from 'next-themes'
 import { toast } from 'sonner'
-import { BellOff, Check, Clock, Hash, Mail, MoonStar, Monitor, Moon, ShieldCheck, Smile, Sun } from 'lucide-react'
+import { BellOff, Check, Clock, Hash, Mail, MoonStar, Monitor, Moon, ShieldCheck, Smile, Sun, Type } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -58,12 +58,24 @@ const THEME_OPTIONS = [
   { value: 'system', label: 'System', description: 'Match your device', icon: Monitor },
 ] as const
 
+// Per-user display zoom presets (multiplier applied to the whole UI).
+// Mirrors Slack's “Zoom” display setting — saved to the profile so the
+// preferred size follows the user across devices.
+const FONT_SIZE_OPTIONS = [
+  { value: 0.85, label: 'Small' },
+  { value: 1, label: 'Default' },
+  { value: 1.15, label: 'Large' },
+  { value: 1.3, label: 'Larger' },
+  { value: 1.45, label: 'Huge' },
+] as const
+
 export function SettingsDialog() {
   const open = useChatStore((s) => s.settingsOpen)
   const setOpen = useChatStore((s) => s.setSettingsOpen)
   const me = useChatStore((s) => s.me)
   const updateMe = useChatStore((s) => s.updateMe)
   const setAccentTheme = useChatStore((s) => s.setAccentTheme)
+  const setFontSize = useChatStore((s) => s.setFontSize)
   const { theme, setTheme } = useTheme()
 
   // ── profile form (reset when the dialog is (re)opened) ─────────────────────
@@ -96,6 +108,7 @@ export function SettingsDialog() {
 
   const activeTheme = theme ?? 'dark'
   const activeAccent = me.accentTheme ?? DEFAULT_ACCENT
+  const activeFontSize = me.fontSize ?? 1
 
   const saveProfile = async () => {
     if (busy) return
@@ -476,6 +489,70 @@ export function SettingsDialog() {
                 ? 'Acme Chat follows your operating system setting — switch it and the app follows along.'
                 : `You're viewing Acme Chat in ${activeTheme} mode.`}
             </p>
+
+            {/* ── Font size / zoom (per user, roams across devices) ─────── */}
+            <div className="space-y-2.5 border-t border-border pt-4">
+              <div className="space-y-1">
+                <Label className="flex items-center gap-1.5">
+                  <Type className="h-3.5 w-3.5 text-muted-foreground" aria-hidden /> Font size
+                </Label>
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  Make everything easier to read — text, buttons and icons scale
+                  together, like your browser’s zoom. Saved to your profile, so it
+                  follows you on every device.
+                </p>
+              </div>
+
+              {/* Live sample — renders at the chosen size inside the preview card */}
+              <div className="rounded-xl border border-border bg-muted/30 p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Preview
+                </p>
+                <p className="mt-1.5 text-[15px] leading-relaxed">
+                  The quick brown fox jumps over the lazy dog 🦊
+                </p>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Sarah Chen · 10:24 AM in #general
+                </p>
+              </div>
+
+              <div className="grid grid-cols-5 gap-1.5">
+                {FONT_SIZE_OPTIONS.map((option) => {
+                  const active = Math.abs(activeFontSize - option.value) < 0.001
+                  return (
+                    <button
+                      key={option.label}
+                      type="button"
+                      aria-pressed={active}
+                      aria-label={`Font size ${option.label} — ${Math.round(option.value * 100)}%`}
+                      onClick={() => void setFontSize(option.value)}
+                      className={cn(
+                        'flex flex-col items-center gap-1 rounded-xl border px-1 py-2.5 transition-all duration-150',
+                        active
+                          ? 'border-emerald-500/60 bg-emerald-500/10 ring-1 ring-emerald-500/40'
+                          : 'border-border hover:border-emerald-500/40 hover:bg-accent',
+                      )}
+                    >
+                      {/* Mini text glyph that grows with the option */}
+                      <span
+                        className={cn(
+                          'font-bold leading-none',
+                          active ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground',
+                        )}
+                        style={{ fontSize: `${0.65 + option.value * 0.45}rem` }}
+                        aria-hidden
+                      >
+                        Aa
+                      </span>
+                      <span className="text-[10px] font-semibold">{option.label}</span>
+                      <span className="text-[9px] text-muted-foreground">
+                        {Math.round(option.value * 100)}%
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
 
             {/* ── Accent color (Slack-style theme picker) ────────────────── */}
             <div className="space-y-2.5 border-t border-border pt-4">
