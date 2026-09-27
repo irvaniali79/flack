@@ -977,3 +977,26 @@ Stage Summary:
 - Login: sarah@flack.test / demo1234 (owner). QA via http://localhost:81. Demo state: dark + emerald + 100% font.
 - Deliverable: new-x.zip rebuilt + public copy re-synced after this entry + git commit.
 - Next-phase candidates (carryover): connector slash-commands in composer, per-connector multi-channel routing, admin connector overview grid, emoji autocomplete in composer, accent theme quick-switcher in profile menu.
+
+---
+Task ID: 31 (round 2)
+Agent: main (Z.ai Code)
+Task: Post-restart recovery + end-to-end re-verification of Task 31 fixes (user asked "how can I download it?" — deliverable was found wiped) + profile-dialog polish found during QA.
+
+Work Log:
+- SANDBOX RESTART RECOVERY: the sandbox had restarted ~1h prior (all services relaunched automatically, but new-x.zip AND the 15-min webDevReview cron job were wiped). Rebuilt the zip from the current tree, restored the cron (job_id 418019, fixed_rate 900s), verified /new-x.zip → 200. Answered the user: download = Preview Panel → "Open in New Tab" → append /new-x.zip to the URL.
+- CONFIRMED Task 31 round 1 (previous session tail) was fully committed: fb4de24 "Fix: layout-safe font-size zoom + truly round profile borders + UI polish" (36 files). Verified in source AND inside the rebuilt archive: globals.css --ui-scale + h-app/min-h-app utilities; avatar.tsx wrapper span rounded-full + every SIZES entry rounded-full.
+- POST-RESTART E2E VERIFICATION (agent-browser via :81, fresh login via quick-login Sarah): full app shell renders (channels/DMs/AI agents/notifications); at Huge 145%: zoom 1.45, --ui-scale 1.45, scrollHeight 577 = clientHeight 577 (ZERO page scroll — user's reported bug confirmed fixed post-restart), composer bottom 452 ≤ 577 visible, user row bottom exactly 577 (pinned flush, not clipped), settings dialog 43..534 fits.
+- VLM false-alarm autopsy: two VLM rounds claimed the sidebar user-row status text was "clipped". DOM truth: status "🎯 Heads down on v1 launch" complete, domTruncated false, and the sidebar aside spans x=81..452 (starts AFTER the 81px icon rail) — my crops sliced at 300px/375px (assumed sidebar 0..371) and cut the text myself. LESSON: crop with the container's true x-offset, and trust DOM geometry over VLM for clip claims.
+- FOUND + FIXED a real polish wart: profile dialog at 145% overflowed its max-h by 20px (content scrollHeight 385 vs cap 365.9 = 577/1.45−32) — the overflow-y-auto worked, but a 20px fold reads as "cut off", not scrollable (VLM flagged it). FIX in profile-dialog.tsx: max-h calc −2rem → −1rem, pb-5 → pb-4, details mt-4 → mt-3.5. Result: 379 = 379 (no internal scroll), dialog bottom 564 ≤ 577; VLM all-YES (perfect circle + round ring, nothing cut off, well-proportioned).
+- Profile avatar + ring verified at 145%: 139×139 wrapper, border-radius 2.3e+07px (perfect circle), ring = oklab(dark) 0 0 0 4px following the circle — the user's 3rd square-border report is definitively closed.
+- Demo state restored via the real UI (Settings → Theme → Default 100%): zoom 1, localStorage "1", both PATCH /api/me → 200 (set + reset persisted to DB).
+- INCIDENT: the dev server (next dev :3000) died silently AGAIN mid-round (curl 000, no process; known issue — mini-services unaffected). Relaunched with ( setsid bun run dev > /dev/null 2>&1 < /dev/null & ); app 200, zip 200 full size; agent-browser session survived (cookie intact), app healthy after reload.
+- lint 0 errors; tsc 0 errors in src/; browser page-errors 0, console warnings 0; dev.log all-200s.
+
+Stage Summary:
+- DELIVERABLE: /home/z/my-project/new-x.zip (9,926,429 bytes, contains the round-2 profile-dialog polish — verified in-archive) + public copy → /new-x.zip HTTP 200 full size. Download instructions given to the user (Preview Panel → Open in New Tab → /new-x.zip).
+- VERIFIED POST-RESTART: all Task 31 round-1 fixes intact and working (font-size zoom-safe at every scale, round profile borders, no page scroll, composer + user row in place). One polish fix added (profile dialog no longer micro-overflows at 145%).
+- OPERATIONAL NOTES: (a) agent-browser eval keeps variables between calls — wrap evals in IIFEs; (b) when cropping screenshots for VLM, use the container's TRUE rect (sidebar is x=81..452 at 145%, not 0..371); (c) next dev :3000 can die silently any time — quick recovery: `( setsid bun run dev > /dev/null 2>&1 < /dev/null & )` from the project dir.
+- Login: sarah@flack.test / demo1234 (owner). QA via http://localhost:81. Demo state: dark + emerald + 100% font.
+- Next-phase candidates (carryover): connector slash-commands in composer, per-connector multi-channel routing, admin connector overview grid, emoji autocomplete in composer, accent theme quick-switcher in profile menu.

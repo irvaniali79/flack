@@ -154,7 +154,7 @@ export function ProfileDialog() {
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && setProfileUserId(null)}>
-      <DialogContent className="max-h-[calc(100dvh/var(--ui-scale)-2rem)] overflow-y-auto rounded-2xl p-0 sm:max-w-sm">
+      <DialogContent className="max-h-[calc(100dvh/var(--ui-scale)-1rem)] overflow-y-auto rounded-2xl p-0 sm:max-w-sm">
         {/* banner / cover photo */}
         {bannerSrc ? (
           <div className="relative h-28 w-full bg-muted">
@@ -210,7 +210,7 @@ export function ProfileDialog() {
             )}
           </div>
         )}
-        <div className="px-5 pb-5">
+        <div className="px-5 pb-4">
           <div className="-mt-10 mb-3 flex items-end justify-between">
             <div className="relative">
               <UserAvatar user={previewUser} size="xxl" className="ring-4 ring-background" />
@@ -372,7 +372,7 @@ export function ProfileDialog() {
                 </p>
               )}
 
-              <div className="mt-4 space-y-2 text-sm">
+              <div className="mt-3.5 space-y-2 text-sm">
                 {user.email && (
                   <p className="flex items-center gap-2 text-muted-foreground">
                     <Mail className="h-3.5 w-3.5 shrink-0" aria-hidden />
