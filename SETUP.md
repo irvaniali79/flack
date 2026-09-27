@@ -4,6 +4,14 @@
 
 A Slack-style team chat platform with AI Agents, MCP-style tools, workflow automation, a 20-connector App Directory (Google Calendar, Google Drive, GitHub, Zoom, …), 12 color accent themes, Slack migration tooling, and a Slack-compatible API layer.
 
+> 🐳 **Prefer Docker?** The full stack (app + realtime + scheduler + gateway) runs with one command after extracting — no Bun install needed:
+>
+> ```bash
+> docker compose up -d --build   # → http://localhost:3000
+> ```
+>
+> Details: README.md → *Run with Docker* (env knobs, volumes, production notes).
+
 ---
 
 ## 1. What's inside

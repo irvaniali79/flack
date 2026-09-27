@@ -106,6 +106,59 @@ The login screen lists one-click demo users. The primary account:
 
 ---
 
+## 🐳 Run with Docker
+
+The whole stack ships containerized — one command, no Bun/Node install needed:
+
+```bash
+docker compose up -d --build
+```
+
+Then open **http://localhost:3000** and sign in with the demo account above.
+
+**What runs** (docker-compose.yml):
+
+| Service | Image | What it does |
+| --- | --- | --- |
+| `app` | `flack-app` (root `Dockerfile`) | Next.js 16 standalone server + Prisma/SQLite (Bun runtime) |
+| `chat` | `flack-chat` (`mini-services/chat-service/Dockerfile`) | socket.io realtime gateway on `:3003` |
+| `scheduler` | `flack-scheduler` (`mini-services/scheduler-service/Dockerfile`) | 60-second workflow ticker on `:3004` |
+| `gateway` | `caddy:2` (`docker/caddy/Caddyfile`) | Routes traffic: everything → `app`, `/?XTransformPort=3003` → `chat`, `/?XTransformPort=3004` → `scheduler` |
+
+**First boot** — the bundled demo database (`db/custom.db`) and demo uploads are seeded into the named volumes (`flack-db`, `flack-uploads`) automatically, so login works out of the box and your data survives restarts and image rebuilds. The app container also runs `prisma db push` on every boot, so schema changes ship with new images without wiping your volume.
+
+**Knobs** (set in your shell or a `.env` next to `docker-compose.yml`):
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `FLACK_PORT` | `3000` | Host port for the gateway |
+| `FLACK_TICK_SECRET` | `dev-tick-secret` | Shared secret between `scheduler` and `app` — **change it** for anything public |
+| `FLACK_SEED_DEMO` | `1` | `0` = skip the demo DB; a minimal fresh workspace is created instead (org + `#general` + `#random` + one owner) |
+| `FLACK_ADMIN_EMAIL` | `admin@flack.local` | Fresh-mode owner login |
+| `FLACK_ADMIN_NAME` | `Flack Admin` | Fresh-mode owner display name |
+| `FLACK_ADMIN_PASSWORD` | `flack-admin` | Fresh-mode owner password (min 8 chars) |
+
+**Everyday commands:**
+
+```bash
+docker compose up -d --build     # build + start everything
+docker compose logs -f app       # tail the app (gateway/chat/scheduler likewise)
+docker compose ps                # health of all four services
+docker compose restart app       # restart after an image rebuild
+docker compose down              # stop (volumes kept — your data survives)
+docker compose down -v           # stop + wipe db/uploads (fresh demo data next boot)
+```
+
+**Production notes**
+
+- Put TLS in front (your own proxy, or extend `docker/caddy/Caddyfile` with a site block + `tls`), and stop exposing plain HTTP.
+- Change the demo account passwords — or boot with `FLACK_SEED_DEMO=0` and your own `FLACK_ADMIN_*` values for a clean workspace.
+- Rotate `FLACK_TICK_SECRET` (applies to both `app` and `scheduler`).
+- The gateway only whitelists `XTransformPort=3003/3004` (the sandbox gateway proxies any port — this one deliberately doesn't).
+- AI features (agents, summaries) depend on the bundled `z-ai-web-dev-sdk`; everything else in the stack is fully self-contained.
+
+---
+
 ## ⚙️ Configuration
 
 ### Environment (`.env`)
