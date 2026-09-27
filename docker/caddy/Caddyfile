@@ -1,0 +1,26 @@
+# Flack Chat — containerized gateway (docker-compose "gateway" service)
+#
+# Mirrors the sandbox gateway contract:
+#   • everything → app:3000 (Next.js standalone)
+#   • /?XTransformPort=3003 → chat:3003   (socket.io, path MUST stay '/')
+#   • /?XTransformPort=3004 → scheduler:3004 (health/debug)
+#
+# Unlike the sandbox gateway (which proxies ANY port), this config whitelists
+# exactly two upstreams — arbitrary XTransformPort values fall through to the
+# app. WebSockets are proxied transparently by Caddy's reverse_proxy.
+
+:80 {
+	@chat query XTransformPort=3003
+	handle @chat {
+		reverse_proxy chat:3003
+	}
+
+	@scheduler query XTransformPort=3004
+	handle @scheduler {
+		reverse_proxy scheduler:3004
+	}
+
+	handle {
+		reverse_proxy app:3000
+	}
+}

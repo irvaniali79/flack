@@ -1,0 +1,33 @@
+# Keep the Docker build context lean & hermetic (app image — repo root context)
+
+# VCS / CI metadata — never needed inside images
+.git
+.github
+
+# Local build artifacts & dependencies (rebuilt inside the image)
+.next
+node_modules
+mini-services/*/node_modules
+
+# Local env / secrets — images get their env from compose instead
+.env
+.env.*
+
+# Runtime logs & PID files
+dev.log
+server.log
+dev.pid
+*.log
+
+# Big local artifacts
+*.zip
+public/*.zip
+download
+skills
+tool-results
+agent-ctx
+
+# Dev-only folders not needed by the app image
+tests
+examples
+mini-services/chat-service/scripts

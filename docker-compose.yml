@@ -1,0 +1,106 @@
+# Flack Chat — full self-hosted stack.
+#
+#   docker compose up -d --build
+#   → open http://localhost:3000  (login: sarah@flack.test / demo1234)
+#
+# Services: app (Next.js standalone + Prisma/SQLite) · chat (socket.io :3003)
+#           scheduler (workflow ticker :3004) · gateway (Caddy — routes
+#           /?XTransformPort to the mini-services, everything else to the app)
+# Volumes:  flack-db (SQLite) · flack-uploads (uploaded files)
+#
+# Knobs (set in a shell or a .env next to this file):
+#   FLACK_PORT          host port for the gateway       (default 3000)
+#   FLACK_TICK_SECRET   scheduler↔app shared secret     (default dev-tick-secret)
+#   FLACK_SEED_DEMO     1 = seed demo DB, 0 = fresh     (default 1)
+#   FLACK_ADMIN_EMAIL / FLACK_ADMIN_NAME / FLACK_ADMIN_PASSWORD
+#                       fresh-mode owner account        (default admin@flack.local / flack-admin)
+name: flack
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: flack-app
+    restart: unless-stopped
+    init: true
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: file:/app/db/custom.db
+      # Cross-container service URLs (same defaults the repo uses on localhost)
+      CHAT_SERVICE_URL: http://chat:3003
+      TICK_SECRET: ${FLACK_TICK_SECRET:-dev-tick-secret}
+      FLACK_SEED_DEMO: ${FLACK_SEED_DEMO:-1}
+      # Fresh-mode owner account (only used when FLACK_SEED_DEMO=0)
+      FLACK_ADMIN_EMAIL: ${FLACK_ADMIN_EMAIL:-admin@flack.local}
+      FLACK_ADMIN_NAME: ${FLACK_ADMIN_NAME:-Flack Admin}
+      FLACK_ADMIN_PASSWORD: ${FLACK_ADMIN_PASSWORD:-flack-admin}
+    volumes:
+      - flack-db:/app/db
+      - flack-uploads:/app/uploads
+    expose:
+      - "3000"
+    healthcheck:
+      test: ["CMD", "bun", "-e", "const r = await fetch('http://127.0.0.1:3000/api'); if (!r.ok) throw new Error(String(r.status))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  chat:
+    build:
+      context: ./mini-services/chat-service
+    image: flack-chat
+    restart: unless-stopped
+    init: true
+    expose:
+      - "3003"
+    healthcheck:
+      test: ["CMD", "bun", "-e", "const r = await fetch('http://127.0.0.1:3003/health'); if (!r.ok) throw new Error(String(r.status))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  scheduler:
+    build:
+      context: ./mini-services/scheduler-service
+    image: flack-scheduler
+    restart: unless-stopped
+    init: true
+    environment:
+      APP_HOST: http://app:3000
+      TICK_SECRET: ${FLACK_TICK_SECRET:-dev-tick-secret}
+    expose:
+      - "3004"
+    healthcheck:
+      test: ["CMD", "bun", "-e", "const r = await fetch('http://127.0.0.1:3004/health'); if (!r.ok) throw new Error(String(r.status))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  gateway:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "${FLACK_PORT:-3000}:80"
+    volumes:
+      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      app:
+        condition: service_healthy
+      chat:
+        condition: service_healthy
+      scheduler:
+        condition: service_healthy
+
+volumes:
+  flack-db:
+  flack-uploads:
