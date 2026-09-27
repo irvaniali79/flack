@@ -176,7 +176,9 @@ That's the only required config. Everything else lives in the database.
 
 ## 🤝 Contributing
 
-Contributions are welcome! The project follows a simple workflow:
+Contributions are welcome! **Full guide: [CONTRIBUTING.md](CONTRIBUTING.md)** — setup, architecture map, code conventions, and the PR process. By participating you agree to our **[Code of Conduct](CODE_OF_CONDUCT.md)**. Found a security issue? Please follow **[SECURITY.md](SECURITY.md)** instead of opening a public issue.
+
+The project follows a simple workflow:
 
 1. **Fork / branch** — create a feature branch from `main`
    ```bash
@@ -215,13 +217,13 @@ Found something broken? Please include:
 4. **Console output** — open DevTools → Console and copy any red errors
 5. **Screenshot or screen recording** if visual
 
-Send it to the project maintainer or open an issue in the repository. For urgent regressions, check `dev.log` and `worklog.md` first — known issues and recent changes are documented there.
+Send it to the project maintainer or open an issue in the repository — the repo ships **bug report & feature request forms** (`.github/ISSUE_TEMPLATE/`) that guide you through these fields. For urgent regressions, check `dev.log` and `worklog.md` first — known issues and recent changes are documented there.
 
 ---
 
 ## 📄 License
 
-Provided as a reference implementation for evaluation and learning.
+Released under the [MIT License](LICENSE) — see the `LICENSE` file. Provided as a reference implementation for evaluation and learning.
 
 ---
 

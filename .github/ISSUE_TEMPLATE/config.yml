@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📖 Usage & how-to questions
+    url: https://github.com/flack-inc/flack-chat#readme
+    about: Check the README's Usage section (basics, power features, personalization) before opening an issue.
+  - name: 🛠 Local setup trouble
+    url: https://github.com/flack-inc/flack-chat/blob/main/SETUP.md
+    about: SETUP.md covers archive setup, environment, and the mini-services.
+  - name: 🔒 Security vulnerabilities
+    url: https://github.com/flack-inc/flack-chat/blob/main/SECURITY.md
+    about: Please do NOT open public issues for security reports — follow SECURITY.md.
+  - name: 📚 How it was built (architecture notes)
+    url: https://github.com/flack-inc/flack-chat/blob/main/worklog.md
+    about: The per-task development log with architecture decisions and known pitfalls.

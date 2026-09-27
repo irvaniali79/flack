@@ -1000,3 +1000,30 @@ Stage Summary:
 - OPERATIONAL NOTES: (a) agent-browser eval keeps variables between calls — wrap evals in IIFEs; (b) when cropping screenshots for VLM, use the container's TRUE rect (sidebar is x=81..452 at 145%, not 0..371); (c) next dev :3000 can die silently any time — quick recovery: `( setsid bun run dev > /dev/null 2>&1 < /dev/null & )` from the project dir.
 - Login: sarah@flack.test / demo1234 (owner). QA via http://localhost:81. Demo state: dark + emerald + 100% font.
 - Next-phase candidates (carryover): connector slash-commands in composer, per-connector multi-channel routing, admin connector overview grid, emoji autocomplete in composer, accent theme quick-switcher in profile menu.
+
+---
+Task ID: 32
+Agent: main (Z.ai Code)
+Task: User request — "Community Standards: code of conduct, Security policy, Contributing — complete these readme files inside the project for github" (اینا مستندات رو درست کن). Build the full GitHub community-standards document set.
+
+Work Log:
+- Audited the repo: README.md exists (comprehensive, Task 29) but no .github/ folder, no LICENSE, no CODE_OF_CONDUCT/SECURITY/CONTRIBUTING files → the GitHub Community Standards checklist was 0/8 on community files (only README + description were done).
+- CREATED the complete set:
+  1. CODE_OF_CONDUCT.md (root) — Contributor Covenant v2.1 (GitHub's recommended standard) with the 4-level Community Impact enforcement ladder; enforcement contact conduct@flack.test (project-consistent domain) + private maintainer contact.
+  2. SECURITY.md (root) — supported-versions policy (main only), private reporting (GitHub Security Advisories preferred / security@flack.test, 48h ack / 5-day triage SLAs), scope section mapped to the REAL attack surface (flack_session cookie, TOTP+recovery codes, flack_ API keys incl. Slack-compat + MCP authz, file-upload traversal, markdown/emoji/connector-card XSS, socket.io :3003/:3004, Slack import untrusted archives), out-of-scope list (demo creds, rate-limiting on demo deploys, DoS), self-hoster hardening checklist (change demo passwords, rotate keys, don't expose 3003/3004, TLS, keep db+uploads out of static paths), and VERIFIED crypto notes.
+  3. CONTRIBUTING.md (root) — ways to contribute, where-to-get-help map, dev-setup quickstart (full detail stays in README), a "where things live" table covering all 15 areas, code style (TS strict/no-any, shadcn-first, ARIA, responsive+both-themes), FIVE project-specific hard-learned rules (--ui-scale/h-app viewport-height rule, avatar rounded-full wrapper + unscoped focus rings, composer sendingRef guard, emitToUsers realtime broadcast duty, Prisma no-list rule), db-change workflow, quality gates (lint+tsc+manual QA), commit convention documented from the actual git history (Type: summary — Feat/Fix/Polish/Docs/Rebrand), branch naming, PR process + review expectations, MIT DCO-style clause, and the worklog backlog as "Good first issues".
+  4. LICENSE (root) — MIT, "Copyright (c) 2026 Flack Inc" (completes the GitHub checklist; README license section updated to match — previously said only "reference implementation", no file).
+  5. .github/ISSUE_TEMPLATE/bug_report.yml — GitHub issue FORM (not just md) with 9 structured fields: what-happened, steps, expected, area dropdown (17 areas), theme dropdown, font-size dropdown (documents the zoom presets), browser/OS input, console output (shell render), screenshots; security disclaimer banner at top.
+  6. .github/ISSUE_TEMPLATE/feature_request.yml — problem-first form (problem/solution/alternatives/area/context).
+  7. .github/ISSUE_TEMPLATE/config.yml — blank issues disabled + 4 contact links (README usage, SETUP, SECURITY, worklog architecture notes).
+  8. .github/PULL_REQUEST_TEMPLATE.md — summary/type-of-change/QA-performed with the full checklist (lint, tsc, dark+light, mobile ~375px, console, db:push+restart+seeds).
+- ACCURACY CHECK before shipping: grep-verified the crypto claims against the code — passwords are scrypt (NOT bcrypt; corrected), TOTP HMAC-SHA1 + sha256 recovery codes ✓, API keys sha256-hashed ✓, sessions are plaintext-stored 256-bit random tokens (corrected the doc from "hashed at rest" + documented the secure:false-because-HTTP-gateway nuance and the https self-hoster advice).
+- README.md updated: Contributing section now links CONTRIBUTING.md + CoC + SECURITY.md; bug section mentions the shipped issue forms; License section now MIT + LICENSE link.
+- All 3 YAML files validated with python yaml.safe_load → OK. No app-code changes (docs only) → no QA/browser run needed; lint not affected (md/yml only).
+
+Stage Summary:
+- SHIPPED: the complete GitHub Community Standards set — Code of Conduct (Contributor Covenant 2.1), Security Policy (project-specific scope + SLAs + self-hoster guide), Contributing Guide (architecture map + 5 hard-learned project rules), MIT License, structured bug/feature issue forms, issue-router config, and a PR template with QA checklist. Repo now scores 100% on GitHub's community standards checklist (README + description were already present).
+- DECISIONS: (a) MIT chosen for the license (GitHub checklist requires one; matches the "reference implementation" spirit — user can swap); (b) enforcement/security contacts use the project's own @flack.test domain fiction for consistency (real deployment would swap to real addresses); (c) issue templates use YAML issue FORMS (interactive, validated) rather than plain .md; (d) CONTRIBUTING.md documents the real commit convention mined from git history and the worklog backlog as good-first-issues.
+- Login: sarah@flack.test / demo1234 (owner). QA via http://localhost:81. Demo state: dark + emerald + 100% font.
+- Deliverable: new-x.zip rebuilt with all community files + public copy re-synced.
+- Next-phase candidates (carryover): connector slash-commands in composer, per-connector multi-channel routing, admin connector overview grid, emoji autocomplete in composer, accent theme quick-switcher in profile menu.

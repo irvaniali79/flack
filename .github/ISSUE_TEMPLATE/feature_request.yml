@@ -1,0 +1,65 @@
+name: 💡 Feature request
+description: Suggest an idea for Flack Chat
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea! 💡 Tell us the problem first — the best features
+        start from a real need, not a solution.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: What's frustrating, slow, or missing? "As a ___ I want ___ so that ___" works great
+      placeholder: |
+        As a channel admin, I want to bulk-archive old channels, so that the sidebar isn't cluttered with dead channels.
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: What solution would you like?
+      description: Describe what you'd expect to see and do
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What alternatives have you considered?
+      description: Other ways to solve it, features in Slack/other tools you'd model this on
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which area would this improve?
+      options:
+        Messaging (send/edit/delete, composer, slash commands)
+        Threads & replies
+        Channels & sidebar
+        DMs & group DMs
+        AI agents / mentions
+        Workflows
+        Connectors / App Directory
+        Integrations (API keys, Slack-compat API, MCP)
+        Search
+        Notifications & presence
+        Profiles & settings
+        Theme / appearance / font size
+        Admin dashboard
+        Authentication / 2FA / sessions
+        Slack import/export
+        File uploads / emoji
+        Accessibility
+        Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else?
+      description: Mockups, screenshots, links, examples from other tools

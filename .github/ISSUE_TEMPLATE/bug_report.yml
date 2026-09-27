@@ -1,0 +1,109 @@
+name: 🐞 Bug report
+description: Something is broken or behaving unexpectedly — tell us what happened
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report! 🙏
+        **Security issues are never reported here** — see [SECURITY.md](../blob/main/SECURITY.md) for private reporting.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug
+      placeholder: |
+        Right-clicked a message → "Mark unread from here" — the channel badge didn't update until I switched channels.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Numbered, exact steps — the more precise, the faster the fix
+      placeholder: |
+        1. Sign in as any user
+        2. Open #general
+        3. Right-click any message
+        4. Click "…"
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which area of the app?
+      options:
+        Messaging (send/edit/delete, composer, slash commands)
+        Threads & replies
+        Channels & sidebar
+        DMs & group DMs
+        AI agents / mentions
+        Workflows
+        Connectors / App Directory
+        Integrations (API keys, Slack-compat API, MCP)
+        Search
+        Notifications & presence
+        Profiles & settings
+        Theme / appearance / font size
+        Admin dashboard
+        Authentication / 2FA / sessions
+        Slack import/export
+        File uploads / emoji
+        Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: theme
+    attributes:
+      label: Theme
+      options:
+        - Dark
+        - Light
+        - System
+        - Not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: font-size
+    attributes:
+      label: Font-size setting
+      options:
+        - "85% (Small)"
+        - "100% (Default)"
+        - "115% (Large)"
+        - "130% (Larger)"
+        - "145% (Huge)"
+        - Not sure
+    validations:
+      required: false
+
+  - type: input
+    id: environment
+    attributes:
+      label: Browser & OS
+      placeholder: "Chrome 129 · Windows 11"
+
+  - type: textarea
+    id: console
+    attributes:
+      label: Console output
+      description: DevTools → Console — paste any red errors (they help a lot)
+      render: shell
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or recording
+      description: If it's a visual bug, a picture is worth a thousand words
